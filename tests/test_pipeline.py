@@ -6,6 +6,7 @@ import pytest
 from payroll_sentinel.evaluate import score
 from payroll_sentinel.generate import generate
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
+from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
 from payroll_sentinel.taxonomy import legal_min_wage
 from payroll_sentinel.validate import rule_checks, validate
 
@@ -117,3 +118,21 @@ def test_end_to_end_quality(data):
     assert s["overall"]["precision"] > 0.85
     assert s["overall"]["recall"] > 0.75
     assert s["false_alarm_rate"] < 0.01
+
+
+def test_run_evaluation_matches_direct_scoring(data):
+    submitted, truth = data
+    ev = run_evaluation(seed=1, n_companies=8)
+    direct = score(validate(submitted, rule_normalize(submitted["job_title"]), seed=1), truth)
+    assert ev.score["overall"] == direct["overall"]
+    assert ev.report().startswith("# Evaluation report")
+    assert ev.oracle_score["overall"]["recall"] >= ev.score["overall"]["recall"]
+
+
+def test_validate_submissions_without_row_id(data):
+    submitted = data[0].drop(columns=["row_id"])
+    assert missing_columns(submitted) == []
+    result = validate_submissions(submitted)
+    assert "row_id" not in submitted.columns           # caller's frame is not modified
+    assert len(result.records) == len(submitted)
+    assert missing_columns(submitted.drop(columns=["hire_date"])) == ["hire_date"]
