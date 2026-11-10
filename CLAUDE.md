@@ -47,6 +47,7 @@ pytest -q
 python -m payroll_sentinel.cli run            # rules only, offline, free
 python -m payroll_sentinel.cli run --llm      # needs LLM_API_KEY
 python -m payroll_sentinel.cli validate FILE  # validate a CSV with the same columns
+pip install -e ".[ui]" && streamlit run app.py  # web UI (Windows: double-click run_ui.bat)
 ```
 
 CI (`.github/workflows/tests.yml`) runs the tests and the full pipeline on Python
@@ -56,7 +57,8 @@ CI (`.github/workflows/tests.yml`) runs the tests and the full pipeline on Pytho
 ## Architecture (Module A)
 
 Data flows `generate` → `normalize` (rules or LLM) → `validate` → `evaluate`;
-`cli.py` wires them. `taxonomy.py` holds the job families, levels, cities and the
+`pipeline.py` wires them as plain functions, used by both `cli.py` and the
+Streamlit UI in `app.py`. Uploads in the UI always use rules, never the LLM. `taxonomy.py` holds the job families, levels, cities and the
 2026 minimum wage (R$ 1,621, prorated by weekly hours; internship stipends are
 exempt). `validate.py` has two layers: deterministic rules, then a peer comparison
 in which robust z-score, IQR and Isolation Forest vote (flag at 2 of 3).
@@ -70,8 +72,7 @@ perfect titles, recall is 0.967, so title normalization is the main lever.
    - run `--llm` on the Gemini free tier and measure the gain over the baseline;
    - add a README table comparing models (accuracy × latency × cost);
    - add natural-language questions over the benchmark (the LLM writes a pandas
-     query, the code executes it);
-   - add a Streamlit UI.
+     query, the code executes it).
 2. **Module B, labor-claim triage:**
    - A shared deterministic engine `salary_core` computes net pay for CLT,
      contractor (PJ, Simples Nacional) and internship.

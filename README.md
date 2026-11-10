@@ -109,9 +109,28 @@ The full report, including per-error-type numbers and company decisions, is in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 15 tests
+pytest                                                 # 20 tests (2 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 ```
+
+### Web UI (no terminal needed after setup)
+
+```bash
+pip install -e ".[ui]"
+streamlit run app.py      # then open http://localhost:8501
+```
+
+On Windows, double-click `run_ui.bat` instead: it starts the app from `.venv`
+and opens the browser. The UI has two tabs:
+
+* **Evaluation on synthetic data**: pick a seed and a number of companies, run,
+  and see the same metrics as `reports/evaluation.md`, with filterable issues and
+  CSV/Markdown downloads.
+* **Validate a CSV**: upload your own file. Uploads always use the keyword rules,
+  so payroll data is never sent to an LLM.
+
+The server only listens on `localhost` and Streamlit's usage statistics are off
+(`.streamlit/config.toml`).
 
 ### Optional: LLM title normalization (free tiers)
 
@@ -148,8 +167,10 @@ src/payroll_sentinel/
   llm.py        ~40-line OpenAI-compatible client (Gemini / Groq / Ollama)
   validate.py   rules, peer-comparison ensemble, cause diagnosis, company decision
   evaluate.py   precision/recall per error type and per detector, title accuracy
+  pipeline.py   the pipeline as plain functions, shared by the CLI and the web UI
   cli.py        `run` and `validate` commands
-tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality
+app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
+tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
 
 ## Limitations and next steps
@@ -159,11 +180,9 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 * The LLM normalizer is implemented and tested against a fake OpenAI-compatible
   server, but its accuracy hasn't been measured on a real model yet. **Next step:**
   run Gemini, Groq and a local model, and add an accuracy × latency × cost table.
-* Planned features for this module:
-  * natural-language questions over the validated benchmark ("median for a senior
-    data analyst in Campinas?"), with the LLM writing a pandas query and the code
-    executing it;
-  * a Streamlit UI.
+* Planned feature for this module: natural-language questions over the validated
+  benchmark ("median for a senior data analyst in Campinas?"), with the LLM
+  writing a pandas query and the code executing it.
 
 ## License
 
