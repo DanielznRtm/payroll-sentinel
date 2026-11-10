@@ -123,8 +123,11 @@ def statistical_checks(df: pd.DataFrame, families: pd.Series, levels: pd.Series,
         work["resid"], work["level"].map(LEVEL_ORDINAL),
         np.log1p(bonus / (12 * np.exp(work["log_s"]))), tenure,
     ])
-    forest = IsolationForest(n_estimators=300, contamination=0.03, random_state=seed)
-    work["vote_iforest"] = forest.fit_predict(features) == -1
+    if len(work):
+        forest = IsolationForest(n_estimators=300, contamination=0.03, random_state=seed)
+        work["vote_iforest"] = forest.fit_predict(features) == -1
+    else:  # no peer group is large enough (e.g. a small file): nothing to compare against
+        work["vote_iforest"] = False
     work["votes"] = work[["vote_z", "vote_iqr", "vote_iforest"]].sum(axis=1)
     work["flag_ensemble"] = work["votes"] >= 2
     work["peer_ratio"] = np.exp(work["resid"])

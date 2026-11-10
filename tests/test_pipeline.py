@@ -56,6 +56,16 @@ def test_decimal_shift_and_bonus_and_dates():
     assert "future_hire_date" in causes([_row(hire_date="not a date")])
 
 
+def test_small_file_without_peer_groups_still_runs_rules():
+    # Fewer than MIN_GROUP_SIZE rows per (family, level): no peer comparison is possible.
+    rows = [_row(row_id=i, employee_id=f"C1-{i}") for i in range(5)]
+    rows.append(_row(row_id=5, employee_id="C1-5", monthly_salary=8.5))
+    df = pd.DataFrame(rows)
+    result = validate(df, rule_normalize(df["job_title"]))
+    assert set(result.issues["cause"]) == {"decimal_shift"}
+    assert result.records["flag_ensemble"].isna().all()
+
+
 def test_duplicate_ids_flag_both_rows():
     issues = rule_checks(pd.DataFrame([_row(row_id=0), _row(row_id=1)]))
     assert sorted(i["row_id"] for i in issues if i["cause"] == "duplicate_id") == [0, 1]
