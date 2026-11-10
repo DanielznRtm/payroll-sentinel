@@ -20,7 +20,7 @@ import requests
 
 PROVIDERS = {
     # Model names change often: check the provider's model list and override with LLM_MODEL.
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash-lite"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.5-flash-lite"),
     "groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"),
     "ollama": ("http://localhost:11434/v1", "qwen3:8b"),
 }
