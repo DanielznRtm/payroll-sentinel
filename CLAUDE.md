@@ -65,12 +65,16 @@ in which robust z-score, IQR and Isolation Forest vote (flag at 2 of 3).
 
 Baseline (seed 42, keyword rules): precision 0.96, recall 0.884, F1 0.92. With
 perfect titles, recall is 0.967, so title normalization is the main lever.
+LLM titles (`gemini-3.5-flash-lite`, one run, seed 42): precision 0.959, recall
+0.967, F1 0.963; report in `reports/evaluation_llm_gemini-3.5-flash-lite.md`.
+The LLM title cache is keyed by title only, so use a separate `--data` folder per
+model when comparing models.
 
 ## Roadmap
 
 1. **Module A, next:**
-   - run `--llm` on the Gemini free tier and measure the gain over the baseline;
-   - add a README table comparing models (accuracy × latency × cost);
+   - add a README table comparing models (accuracy × latency × cost): Gemini is
+     measured, Groq and a local Ollama model are next;
    - add natural-language questions over the benchmark (the LLM writes a pandas
      query, the code executes it).
 2. **Module B, labor-claim triage:**

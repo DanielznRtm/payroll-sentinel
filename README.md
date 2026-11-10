@@ -62,18 +62,26 @@ read, and C's comparisons are only as good as the data behind them.
 
 ## Results
 
-Default run: 4,502 records, 25 companies, 242 planted errors (seed 42). Titles
-were normalized with keyword rules only, with no LLM. Results are stable across
-seeds 7, 42 and 123: F1 between 0.920 and 0.925.
+Default run: 4,502 records, 25 companies, 242 planted errors (seed 42). The same
+validator was run twice, changing only how job titles are normalized: free,
+offline keyword rules, and an LLM (`gemini-3.5-flash-lite`, Gemini free tier).
+With rules, results are stable across seeds 7, 42 and 123 (F1 between 0.920 and
+0.925); the LLM run is a single run on seed 42.
 
-| Metric | Value |
-|---|---|
-| Precision (flagged rows that really had an error) | **0.96** |
-| Recall (errored rows that got flagged) | **0.88** |
-| False alarms on clean rows | **0.21 %** |
-| Cause correctly identified, when detected | 96–100 % per error type |
+| Metric | Keyword rules | LLM titles |
+|---|---|---|
+| Precision (flagged rows that really had an error) | 0.96 | 0.96 |
+| Recall (errored rows that got flagged) | 0.88 | **0.97** |
+| F1 | 0.92 | **0.96** |
+| False alarms on clean rows | 0.21 % | 0.23 % |
+| Long-tail titles mapped to the right job family | 4 % | **96.5 %** |
+| Statistical errors visible to the peer comparison | 62 / 81 | **81 / 81** |
+| Cause correctly identified, when detected | 96–100 % per error type | 97–100 % per error type |
 
-Peer-comparison detectors on the statistical error types:
+With LLM titles, recall equals the recall with perfect (oracle) titles: 0.967.
+What it still misses is the detection floor described below, not titles.
+
+Peer-comparison detectors on the statistical error types (keyword rules run):
 
 | Detector | Precision | Recall | F1 |
 |---|---|---|---|
@@ -82,8 +90,9 @@ Peer-comparison detectors on the statistical error types:
 | Isolation Forest | 0.51 | 0.55 | 0.53 |
 | **Majority vote** | **0.86** | **0.86** | **0.86** |
 
-The full report, including per-error-type numbers and company decisions, is in
-[`reports/evaluation.md`](reports/evaluation.md).
+The full reports, including per-error-type numbers and company decisions, are in
+[`reports/evaluation.md`](reports/evaluation.md) (keyword rules) and
+[`reports/evaluation_llm_gemini-3.5-flash-lite.md`](reports/evaluation_llm_gemini-3.5-flash-lite.md) (LLM).
 
 ## What I learned
 
@@ -91,14 +100,21 @@ The full report, including per-error-type numbers and company decisions, is in
    of common titles but only 4 % of long-tail ones (`SWE`, `HRBP`,
    `Account Executive`). That leaves 24 % of rows with no peer group, hiding 19 of
    the 81 statistical errors. With perfect titles, the same validator's recall
-   rises from **0.88 to 0.97**. That gap is the job for the LLM normalizer.
-2. **Rules should go first.** Seven of the nine error types reach 100 % recall
+   rises from **0.88 to 0.97**. An LLM normalizer closed that gap entirely
+   (recall 0.967, the oracle value) at zero cost.
+2. **The LLM fails safe here.** It got 39 of 4,484 titled rows wrong, and every
+   one was an abstention ("no family"), never a wrong family: an unmapped row is
+   only left out of the peer comparison, while a wrong family would compare it
+   against the wrong peers. Most misses were `Analista de CX` (customer
+   experience). I did not add that hint to the prompt: tuning the prompt on the
+   errors of the evaluation set would inflate the very number I am reporting.
+3. **Rules should go first.** Seven of the nine error types reach 100 % recall
    with plain rules, at zero cost and with an explanation anyone can read.
-3. **The ensemble mostly fixes IQR's false alarms.** Isolation Forest adds little
+4. **The ensemble mostly fixes IQR's false alarms.** Isolation Forest adds little
    on a one-dimensional problem like this one. The majority vote ends up about as
    good as the robust z-score alone, but noticeably more precise than the IQR fence.
    I kept all three in the report because a weak detector is a finding too.
-4. **There is a detection floor.** Level mismatches smaller than about 2.5× the
+5. **There is a detection floor.** Level mismatches smaller than about 2.5× the
    peer median sit inside normal pay dispersion (log-salary SD around 0.3 within a
    group) and are often missed. Catching them would need richer context, such as
    the company's own pay bands, not a better outlier detector.
@@ -109,7 +125,7 @@ The full report, including per-error-type numbers and company decisions, is in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 20 tests (2 skip without the [ui] extra)
+pytest                                                 # 24 tests (2 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 ```
 
@@ -141,18 +157,27 @@ an environment variable:
 export LLM_PROVIDER=gemini LLM_API_KEY=...   # Google AI Studio key, free tier
 # export LLM_PROVIDER=groq LLM_API_KEY=...   # GroqCloud, free tier
 # export LLM_PROVIDER=ollama                 # local model, no key
-# export LLM_MODEL=...                       # override the default model name
+# export LLM_MODEL=...                       # override the default (gemini-3.5-flash-lite)
 python -m payroll_sentinel.cli run --llm
 ```
 
+Model names change often: `gemini-2.5-flash-lite`, the previous default, returned
+HTTP 404 for a new key. List what your key can use with `GET /models` and set
+`LLM_MODEL`.
+
 Several choices keep it cheap and robust:
 
-* Only **unique** cleaned titles are sent (about 4,500 rows become a few hundred titles).
-* Titles go out in batches of 40.
-* Calls are throttled to stay under free-tier rate limits.
+* Only **unique** cleaned titles are sent: 4,484 titled rows become 1,425 titles.
+* Titles go out in batches of 40, so the default run makes 36 calls. It took
+  401 s on the free tier (about 11 s per call); cost R$ 0.
+* Calls are throttled to stay under free-tier rate limits (at most one every 4.5 s).
 * Results are cached to disk, so a re-run costs nothing.
 * Every answer is validated against the taxonomy. Invalid or missing answers fall
-  back to the rule result.
+  back to the rule result, and the report states the share of titles the LLM
+  actually answered.
+* A rejected request (bad key, unknown model) stops the run at the first call,
+  with the provider's message. If every batch fails, the run fails instead of
+  reporting rule results as LLM results.
 
 Free tiers may use your prompts for training, which is fine for synthetic data but
 not for real payroll.
@@ -177,9 +202,11 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 
 * The data is synthetic. Level markers follow regular patterns, so level accuracy
   is 100 % here; real titles are messier.
-* The LLM normalizer is implemented and tested against a fake OpenAI-compatible
-  server, but its accuracy hasn't been measured on a real model yet. **Next step:**
-  run Gemini, Groq and a local model, and add an accuracy × latency × cost table.
+* The synthetic long-tail titles come from a fixed list of abbreviations and
+  English titles (`SWE`, `HRBP`), which a large model has likely seen before.
+  The 96.5 % long-tail accuracy is measured on that list, not on real-world titles.
+* The LLM result is one model on one seed. **Next step:** run Groq and a local
+  model too, and add an accuracy × latency × cost table.
 * Planned feature for this module: natural-language questions over the validated
   benchmark ("median for a senior data analyst in Campinas?"), with the LLM
   writing a pandas query and the code executing it.
