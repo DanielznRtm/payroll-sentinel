@@ -26,7 +26,7 @@ Payroll Sentinel is the first of three modules that build on each other:
 
 | Module | What it does | Status |
 |---|---|---|
-| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v0.1, this repo |
+| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v0.2, this repo |
 | **B. Labor-claim triage** | Reads a labor-claim petition, extracts each claim with an LLM and checks it against the validated payroll. Taxes and labor-law amounts come from a deterministic calculation engine, never from the LLM | Planned |
 | **C. Pay-fairness tool** | A public tool that tells a person whether their pay is fair: market percentile, net income after work-related costs, and CLT vs. contractor (PJ) | Specified |
 
