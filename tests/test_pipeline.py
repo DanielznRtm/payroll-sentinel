@@ -5,6 +5,7 @@ import pytest
 
 from payroll_sentinel.evaluate import score
 from payroll_sentinel.generate import generate
+from payroll_sentinel.llm import LLMClient, LLMRequestError
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
 from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
 from payroll_sentinel.taxonomy import legal_min_wage
@@ -121,6 +122,44 @@ def test_llm_normalize_dedupes_batches_and_caches(tmp_path):
     assert second.calls == 0                      # everything served from cache
 
 
+class RejectingClient:
+    """Stands in for an API that rejects every request (unknown model, bad key)."""
+    def __init__(self):
+        self.calls = 0
+
+    def chat(self, system, user, json_mode=False):
+        self.calls += 1
+        raise LLMRequestError("HTTP 404 for model 'x': model not found")
+
+
+class FlakyClient:
+    """Stands in for a network that always times out."""
+    def chat(self, system, user, json_mode=False):
+        raise TimeoutError("read timed out")
+
+
+def test_llm_normalize_stops_at_first_rejected_request(tmp_path):
+    client = RejectingClient()
+    with pytest.raises(LLMRequestError, match="model not found"):
+        llm_normalize(pd.Series(["PO Sr", "Tech Lead"]), client, batch_size=1)
+    assert client.calls == 1                      # no point trying the other batches
+
+
+def test_llm_normalize_refuses_to_pass_rules_off_as_llm():
+    with pytest.raises(RuntimeError, match="All 2 LLM batches failed"):
+        llm_normalize(pd.Series(["PO Sr", "Tech Lead"]), FlakyClient(), batch_size=1)
+
+
+def test_llm_client_error_keeps_provider_message(monkeypatch):
+    class Resp:
+        ok, status_code, text = False, 404, '{"error": {"message": "model is no longer available"}}'
+
+    monkeypatch.setattr("payroll_sentinel.llm.requests.post", lambda *a, **k: Resp())
+    client = LLMClient(base_url="http://fake", model="m", min_interval=0)
+    with pytest.raises(LLMRequestError, match="no longer available"):
+        client.chat("system", "user")
+
+
 def test_end_to_end_quality(data):
     submitted, truth = data
     result = validate(submitted, rule_normalize(submitted["job_title"]))
@@ -137,6 +176,14 @@ def test_run_evaluation_matches_direct_scoring(data):
     assert ev.score["overall"] == direct["overall"]
     assert ev.report().startswith("# Evaluation report")
     assert ev.oracle_score["overall"]["recall"] >= ev.score["overall"]["recall"]
+
+
+def test_llm_report_states_coverage(monkeypatch, tmp_path):
+    monkeypatch.setattr(LLMClient, "from_env", classmethod(lambda cls: FakeClient()))
+    ev = run_evaluation(seed=1, n_companies=8, use_llm=True, cache_path=tmp_path / "c.json")
+    assert ev.llm_coverage == 1.0
+    assert "Titles answered by the LLM: 100.0%" in ev.report()
+    assert run_evaluation(seed=1, n_companies=8).llm_coverage is None
 
 
 def test_validate_submissions_without_row_id(data):

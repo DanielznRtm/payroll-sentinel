@@ -51,15 +51,18 @@ class Evaluation:
     oracle_score: dict     # same validator with perfect titles
     titles: pd.DataFrame   # title normalization accuracy
     method: str
+    llm_coverage: float | None = None  # share of non-empty titles the LLM answered (None: rules run)
 
     def report_lines(self) -> list[str]:
         s, so, md = self.score, self.oracle_score, (lambda df: df.to_markdown(index=False))
+        coverage = [] if self.llm_coverage is None else [
+            f"Titles answered by the LLM: {self.llm_coverage:.1%} (the rest fell back to keyword rules).", ""]
         return [
             "# Evaluation report", "",
             f"{len(self.submitted)} records from {self.submitted['company_id'].nunique()} companies; "
             f"{int((self.truth['error_type'] != 'none').sum())} planted errors. "
             f"Title normalizer: **{self.method}**.", "",
-            "## 1. Title normalization", "", md(self.titles), "",
+            "## 1. Title normalization", "", md(self.titles), "", *coverage,
             "## 2. Error detection (any flag on an errored row)", "",
             f"Overall: precision **{s['overall']['precision']}**, recall **{s['overall']['recall']}**, "
             f"F1 **{s['overall']['f1']}**. False alarms on clean rows: {s['false_alarm_rate']:.2%}.", "",
@@ -94,9 +97,11 @@ def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
 
     result = validate(submitted, norm, seed=seed)
     result_oracle = validate(submitted, oracle, seed=seed)
+    has_title = submitted["job_title"].fillna("").astype(str).str.strip().ne("")
     return Evaluation(
         submitted=submitted, truth=truth, result=result,
         score=score(result, truth), oracle_score=score(result_oracle, truth),
         titles=title_accuracy(norm, truth, submitted["job_title"]),
         method="LLM" if use_llm else "keyword rules",
+        llm_coverage=float(norm.loc[has_title, "source"].eq("llm").mean()) if use_llm else None,
     )

@@ -102,6 +102,8 @@ def evaluation_tab() -> None:
     st.success(f"{len(ev.submitted):,} records from {ev.submitted['company_id'].nunique()} companies, "
                f"{int((ev.truth['error_type'] != 'none').sum())} planted errors. "
                f"Title normalizer: **{ev.method}**.")
+    if ev.llm_coverage is not None:
+        st.caption(f"Titles answered by the LLM: {ev.llm_coverage:.1%} (the rest fell back to keyword rules).")
 
     m = st.columns(4)
     m[0].metric("Precision", s["overall"]["precision"], help="Flagged rows that really had an error.")

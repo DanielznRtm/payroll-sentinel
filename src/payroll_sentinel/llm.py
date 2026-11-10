@@ -26,6 +26,10 @@ PROVIDERS = {
 }
 
 
+class LLMRequestError(RuntimeError):
+    """The API rejected the request (bad key, unknown model...): retrying will not help."""
+
+
 @dataclass
 class LLMClient:
     base_url: str
@@ -70,6 +74,7 @@ class LLMClient:
             if resp.status_code in (429, 500, 502, 503):  # rate limit / transient
                 time.sleep(2 ** attempt * 5)
                 continue
-            resp.raise_for_status()
+            if not resp.ok:  # keep the provider's explanation: it says why (model retired, bad key...)
+                raise LLMRequestError(f"HTTP {resp.status_code} for model '{self.model}': {resp.text[:500]}")
             return resp.json()["choices"][0]["message"]["content"]
         raise RuntimeError(f"LLM call failed after {self.max_retries} retries (last {resp.status_code}).")

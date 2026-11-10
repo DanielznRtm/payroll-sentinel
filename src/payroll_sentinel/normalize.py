@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .llm import LLMClient
+from .llm import LLMClient, LLMRequestError
 from .taxonomy import FAMILIES, LEVELS
 
 
@@ -146,20 +146,27 @@ def llm_normalize(titles: pd.Series, client: LLMClient, cache_path: str | Path |
 
     todo = sorted({c for c in clean if c and c not in cache})
     system = _build_system_prompt()
+    n_batches, failed = -(-len(todo) // batch_size), 0
     for start in range(0, len(todo), batch_size):
         chunk = todo[start:start + batch_size]
         ids = list(range(len(chunk)))
         user = "\n".join(f"{i}: {t}" for i, t in zip(ids, chunk))
         try:
             raw = client.chat(system, user, json_mode=True)
-        except Exception as exc:  # network, quota, auth... keep going with rules
+        except LLMRequestError:
+            raise  # bad key or model name: every other batch would fail the same way
+        except Exception as exc:  # network, timeout... keep going with rules for this batch
             print(f"[llm] batch {start // batch_size} failed: {exc}")
+            failed += 1
             continue
         for i, (family, level) in parse_llm_batch(raw, ids).items():
             cache[chunk[i]] = [family, level]
         if cache_file:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
             cache_file.write_text(json.dumps(cache, ensure_ascii=False, indent=0), encoding="utf-8")
+    if n_batches and failed == n_batches:
+        # A report labeled "LLM" that silently contains only rule results would be a false claim.
+        raise RuntimeError(f"All {n_batches} LLM batches failed; no title was normalized by the LLM.")
 
     out = base.copy()
     hit = clean.map(lambda c: c in cache)
