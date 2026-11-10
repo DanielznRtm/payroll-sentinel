@@ -19,7 +19,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,ui]"
 
       - name: Unit and end-to-end tests
         run: pytest -q

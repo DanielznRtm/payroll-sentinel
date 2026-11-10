@@ -1,0 +1,9 @@
+[browser]
+# Do not send usage statistics to Streamlit's servers.
+gatherUsageStats = false
+
+[server]
+# Skip the first-run e-mail prompt in the terminal. run_ui.bat opens the browser itself.
+headless = true
+# Only this computer can open the app: payroll files never leave the machine.
+address = "localhost"
