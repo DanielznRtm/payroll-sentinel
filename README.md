@@ -147,8 +147,9 @@ The full reports, including per-error-type numbers and company decisions, are in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 25 tests (3 skip without the [ui] extra)
+pytest                                                 # 31 tests (3 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
+python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```
 
 ### Web UI (no terminal needed after setup)
