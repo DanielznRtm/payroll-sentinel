@@ -76,8 +76,9 @@ The LLM title cache has one file per provider and model
 1. **Module A, next:**
    - add a README table comparing models (accuracy × latency × cost): Gemini is
      measured, Groq and a local Ollama model are next;
-   - add natural-language questions over the benchmark (the LLM writes a pandas
-     query, the code executes it).
+   - natural-language questions over the benchmark are built (`ask.py`): the LLM
+     only fills a fixed JSON query that the code validates and runs; measuring them
+     needs the hand-written `eval/questions.csv`.
 2. **Module B, labor-claim triage:**
    - A shared deterministic engine `salary_core` computes net pay for CLT,
      contractor (PJ, Simples Nacional) and internship.

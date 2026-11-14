@@ -151,10 +151,28 @@ The full reports, including per-error-type numbers and company decisions, are in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 31 tests (3 skip without the [ui] extra)
+pytest                                                 # 59 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```
+
+`validate` writes `issues.csv`, `companies.csv` and two files to send back to the
+company: `accepted_rows.csv` (ok and warn rows) and `rows_to_fix.csv` (blocked rows),
+both with the company's own columns plus `status` and `issues`.
+
+With an LLM key (see below) you can also ask questions about the validated benchmark:
+
+```bash
+python -m payroll_sentinel.cli ask "qual a mediana de analista de dados sênior em Campinas?"
+python -m payroll_sentinel.cli eval-ask eval/questions.csv  # query and answer accuracy
+python -m payroll_sentinel.cli models                       # models your key can use
+```
+
+The LLM never writes code here. It only fills a fixed JSON form (filters, grouping,
+metric, column); the code checks every field against allow-lists, including the
+exact values each column may take, and runs it with pandas boolean masks. Only rows
+the validator approved are used, salaries are full-time equivalents, every answer
+states how many records it used, and fewer than 5 records gives "not enough data".
 
 ### Web UI (no terminal needed after setup)
 
@@ -164,13 +182,15 @@ streamlit run app.py --server.address localhost   # then open http://localhost:8
 ```
 
 On Windows, double-click `run_ui.bat` instead: it starts the app from `.venv`
-and opens the browser. The UI has two tabs:
+and opens the browser. The UI has two tabs, plus a third when an LLM key is set:
 
 * **Evaluation on synthetic data**: pick a seed and a number of companies, run,
   and see the same metrics as `reports/evaluation.md`, with filterable issues and
   CSV/Markdown downloads.
 * **Validate a CSV**: upload your own file. Uploads always use the keyword rules,
-  so payroll data is never sent to an LLM.
+  so payroll data is never sent to an LLM. Download the accepted rows and the rows
+  to fix, each with its reason, to send back to the company.
+* **Ask the benchmark**: questions in Portuguese or English, answered as above.
 
 With `--server.address localhost` (also used by `run_ui.bat`) only this computer
 can open the app. Streamlit's usage statistics are off (`.streamlit/config.toml`).
@@ -205,7 +225,10 @@ Several choices keep it cheap and robust:
 * Titles go out in batches of 40, so the default run makes 36 calls. It took
   401 s on the free tier (about 11 s per call); cost R$ 0.
 * Calls are throttled to stay under free-tier rate limits (at most one every 4.5 s).
-* Results are cached to disk, so a re-run costs nothing.
+* Results are cached to disk, one file per provider and model, so a re-run costs
+  nothing and one model's answers never stand in for another's. Use
+  `run --llm --no-cache` to time a model: every LLM report states calls, HTTP
+  requests, rate-limit (429) responses and time.
 * Every answer is validated against the taxonomy. Invalid or missing answers fall
   back to the rule result, and the report states the share of titles the LLM
   actually answered.
@@ -223,11 +246,14 @@ src/payroll_sentinel/
   taxonomy.py   job families, levels, cities, minimum-wage rule
   generate.py   synthetic submissions + planted errors + ground truth
   normalize.py  keyword baseline and LLM normalizer (batching, cache, validation)
-  llm.py        ~40-line OpenAI-compatible client (Gemini / Groq / Ollama)
+  llm.py        small OpenAI-compatible client (Gemini / Groq / Ollama), with run stats
   validate.py   rules, peer-comparison ensemble, cause diagnosis, company decision
   evaluate.py   precision/recall per error type and per detector, title accuracy
   pipeline.py   the pipeline as plain functions, shared by the CLI and the web UI
-  cli.py        `run` and `validate` commands
+  titles_eval.py  held-out title evaluation (abstention vs. wrong family)
+  ask.py        questions over the benchmark: checked JSON query, pandas execution, evaluation
+  cli.py        run, validate, eval-titles, ask, eval-ask and models commands
+eval/           hand-written ground truth: held-out titles and questions
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
@@ -241,9 +267,8 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
   The 96.5 % long-tail accuracy is measured on that list, not on real-world titles.
 * The LLM result is one model on one seed. **Next step:** run Groq and a local
   model too, and add an accuracy × latency × cost table.
-* Planned feature for this module: natural-language questions over the validated
-  benchmark ("median for a senior data analyst in Campinas?"), with the LLM
-  writing a pandas query and the code executing it.
+* Questions over the benchmark work, but their accuracy is not measured yet:
+  `eval/questions.csv` is waiting for hand-written questions.
 
 ## License
 
