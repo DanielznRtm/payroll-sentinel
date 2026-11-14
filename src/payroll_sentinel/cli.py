@@ -3,6 +3,7 @@
     python -m payroll_sentinel.cli run            # generate + validate + evaluate (rules only, free)
     python -m payroll_sentinel.cli run --llm      # same, titles normalized by an LLM (see llm.py)
     python -m payroll_sentinel.cli validate FILE  # validate your own CSV
+    python -m payroll_sentinel.cli eval-titles FILE [--llm]  # score titles on a held-out file
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from .pipeline import run_evaluation, validate_submissions
+from .titles_eval import HeldoutError, evaluate_titles, load_heldout
 
 
 def cmd_run(args) -> None:
@@ -44,6 +46,21 @@ def cmd_validate(args) -> None:
     print(f"\n{len(result.issues)} issues written to {out / 'issues.csv'}")
 
 
+def cmd_eval_titles(args) -> None:
+    try:
+        gold = load_heldout(args.file)
+    except HeldoutError as exc:
+        raise SystemExit(f"{args.file} is not ready:\n{exc}")
+    ev = evaluate_titles(gold, use_llm=args.llm)
+    out = Path(args.reports)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"titles_heldout_{ev.slug}.md"
+    text = ev.report(Path(args.file).as_posix())
+    path.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"Report written to {path}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="payroll_sentinel")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -59,6 +76,11 @@ def main() -> None:
     val.add_argument("--llm", action="store_true")
     val.add_argument("--reports", default="reports")
     val.set_defaults(func=cmd_validate)
+    ttl = sub.add_parser("eval-titles", help="score title normalization on a held-out file")
+    ttl.add_argument("file", help="CSV with columns title,family,level (empty family: outside the taxonomy)")
+    ttl.add_argument("--llm", action="store_true", help="normalize titles with an LLM (no cache)")
+    ttl.add_argument("--reports", default="reports")
+    ttl.set_defaults(func=cmd_eval_titles)
     args = p.parse_args()
     args.func(args)
 
