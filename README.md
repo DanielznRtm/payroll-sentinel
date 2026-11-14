@@ -20,6 +20,28 @@ the file or ask for a resubmission.
 Everything runs on **synthetic data with planted, labeled errors**, so every claim
 below is measured, not assumed.
 
+## In one example
+
+A company sends this file (illustrative numbers):
+
+| Employee | Job title | Monthly salary |
+|---|---|---|
+| Ana | Analista de Dados Pleno | R$ 7,200 |
+| Bruno | Analista de Dados Pleno | R$ 86,400 |
+| Carla | Operadora de Produção | R$ 1,200 |
+| Diego | HRBP Sr | R$ 9,800 |
+
+Payroll Sentinel answers:
+
+| Employee | Status | Why |
+|---|---|---|
+| Ana | ok | In line with other mid-level data analysts |
+| Bruno | block | About 12× the peer median: an annual salary typed in the monthly field (7,200 × 12) |
+| Carla | block | Below the 2026 minimum wage of R$ 1,621 for 44 h/week |
+| Diego | ok | The LLM maps `HRBP Sr` to *HR analyst, senior*, so he is compared with the right peers. Keyword rules alone would leave him out |
+
+Decision for the company: accept the file without the blocked rows, or ask for a corrected one.
+
 ## Roadmap: clean data first, AI on top
 
 Payroll Sentinel is the first of three modules that build on each other:
