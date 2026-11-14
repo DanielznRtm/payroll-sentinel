@@ -12,5 +12,5 @@ if not exist ".venv\Scripts\python.exe" (
 
 rem Open the browser after a few seconds, while the server starts below.
 start "" /b cmd /c "ping -n 5 127.0.0.1 >nul & start http://localhost:8501"
-".venv\Scripts\python.exe" -m streamlit run app.py --server.port 8501
+".venv\Scripts\python.exe" -m streamlit run app.py --server.address localhost --server.port 8501
 pause

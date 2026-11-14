@@ -1,0 +1,3 @@
+# Used only by Streamlit Community Cloud. Installs this package (from src/) with its
+# [ui] extra, so pyproject.toml stays the single source of dependencies.
+.[ui]

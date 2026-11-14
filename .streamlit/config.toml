@@ -5,5 +5,6 @@ gatherUsageStats = false
 [server]
 # Skip the first-run e-mail prompt in the terminal. run_ui.bat opens the browser itself.
 headless = true
-# Only this computer can open the app: payroll files never leave the machine.
-address = "localhost"
+# server.address is not set here on purpose: the public demo on Streamlit Community
+# Cloud must answer its proxy. Local runs pass --server.address localhost instead
+# (run_ui.bat and the README command), so only this computer can open the app.
