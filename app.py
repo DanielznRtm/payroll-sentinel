@@ -5,6 +5,10 @@
 
 Two tabs: run the evaluation on synthetic data, or validate your own CSV.
 All numbers come from `payroll_sentinel.pipeline`, the same code the CLI uses.
+
+Public demo: set DEMO_MODE=1 (environment variable or a root-level key in
+Streamlit secrets). The upload tab and the LLM option disappear, the number of
+companies is capped, and a saved LLM report is shown instead of a live call.
 """
 
 from __future__ import annotations
@@ -21,8 +25,22 @@ from payroll_sentinel.pipeline import (REQUIRED_COLUMNS, missing_columns, run_ev
                                        validate_submissions)
 
 LLM_CACHE = Path("data") / "llm_title_cache.json"
+LLM_REPORT = Path(__file__).parent / "reports" / "evaluation_llm_gemini-3.5-flash-lite.md"
+MAX_COMPANIES, DEMO_MAX_COMPANIES = 60, 50
+DEMO_NOTICE = "Public demo: synthetic data only. Nothing you do here is stored."
 DETECTOR_NAMES = {"vote_z": "Robust z-score", "vote_iqr": "IQR fence",
                   "vote_iforest": "Isolation Forest", "flag_ensemble": "Majority vote (2 of 3)"}
+
+
+def demo_mode() -> bool:
+    """True when the deployment sets DEMO_MODE, in Streamlit secrets or the environment."""
+    try:
+        value = st.secrets.get("DEMO_MODE")
+    except FileNotFoundError:  # no secrets.toml: normal when running locally
+        value = None
+    if value is None:
+        value = os.getenv("DEMO_MODE", "")
+    return str(value).strip().lower() in {"1", "true", "yes"}
 
 
 def llm_available() -> bool:
@@ -74,17 +92,24 @@ def show_validation(result, key: str) -> None:
                        "companies.csv", "text/csv", key=f"{key}_dl_companies")
 
 
-def evaluation_tab() -> None:
+def evaluation_tab(demo: bool) -> None:
     st.write("Generates synthetic payroll files with **planted, labeled errors**, validates them "
              "and measures how many errors were caught. Same numbers as "
              "`python -m payroll_sentinel.cli run`.")
     c1, c2, c3 = st.columns(3)
     seed = c1.number_input("Random seed", min_value=0, value=42, step=1, key="seed",
                            help="Same seed, same data. The README numbers use 42.")
-    companies = c2.slider("Companies", min_value=5, max_value=60, value=25, key="companies")
-    use_llm = c3.checkbox("Normalize titles with an LLM", key="llm", disabled=not llm_available(),
-                          help="Needs LLM_API_KEY (or LLM_PROVIDER=ollama) set before starting "
-                               "the app. Off: free, offline keyword rules.")
+    companies = c2.slider("Companies", min_value=5, key="companies", value=25,
+                          max_value=DEMO_MAX_COMPANIES if demo else MAX_COMPANIES)
+    if demo:  # no API key on the public server: show the saved LLM run instead
+        use_llm = False
+        c3.caption("Titles use the offline keyword rules. See the **LLM results** tab for a "
+                   "saved LLM run.")
+    else:
+        use_llm = c3.checkbox("Normalize titles with an LLM", key="llm",
+                              disabled=not llm_available(),
+                              help="Needs LLM_API_KEY (or LLM_PROVIDER=ollama) set before "
+                                   "starting the app. Off: free, offline keyword rules.")
 
     if st.button("Run evaluation", type="primary", key="run"):
         st.session_state["eval_params"] = (int(seed), int(companies), bool(use_llm))
@@ -169,11 +194,27 @@ def upload_tab() -> None:
     show_validation(result, key="upload")
 
 
+def llm_results_tab() -> None:
+    st.caption("Saved report from one real run (seed 42, 25 companies) with titles normalized by "
+               "`gemini-3.5-flash-lite`. It is a file from the repository, not a live LLM call.")
+    st.markdown(LLM_REPORT.read_text(encoding="utf-8"))
+
+
+DEMO = demo_mode()
 st.set_page_config(page_title="Payroll Sentinel", layout="wide")
 st.title("Payroll Sentinel")
 st.caption("Validating salary data before it enters a compensation benchmark.")
-tab_eval, tab_upload = st.tabs(["Evaluation on synthetic data", "Validate a CSV"])
-with tab_eval:
-    evaluation_tab()
-with tab_upload:
-    upload_tab()
+if DEMO:
+    st.info(DEMO_NOTICE)
+    # The upload tab is not rendered at all, so the public server never receives a file.
+    tab_eval, tab_llm = st.tabs(["Evaluation on synthetic data", "LLM results"])
+    with tab_eval:
+        evaluation_tab(demo=True)
+    with tab_llm:
+        llm_results_tab()
+else:
+    tab_eval, tab_upload = st.tabs(["Evaluation on synthetic data", "Validate a CSV"])
+    with tab_eval:
+        evaluation_tab(demo=False)
+    with tab_upload:
+        upload_tab()

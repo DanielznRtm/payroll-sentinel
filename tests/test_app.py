@@ -18,12 +18,27 @@ APP = Path(__file__).resolve().parents[1] / "app.py"
 def app(monkeypatch):
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("DEMO_MODE", raising=False)
     return AppTest.from_file(str(APP), default_timeout=120).run()
 
 
 def test_app_starts_without_errors(app):
     assert not app.exception
     assert app.checkbox(key="llm").disabled       # no key -> LLM option is off
+    assert [t.label for t in app.tabs] == ["Evaluation on synthetic data", "Validate a CSV"]
+
+
+def test_demo_mode_hides_upload(monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "1")
+    monkeypatch.setenv("LLM_API_KEY", "fake-key")   # even with a key, no LLM option in the demo
+    at = AppTest.from_file(str(APP), default_timeout=120).run()
+    assert not at.exception
+    assert [t.label for t in at.tabs] == ["Evaluation on synthetic data", "LLM results"]
+    assert not at.get("file_uploader")               # the upload widget is never rendered
+    assert not at.checkbox                           # no LLM checkbox at all
+    assert at.slider(key="companies").max == 50
+    assert at.info[0].value.startswith("Public demo: synthetic data only.")
+    assert "precision **0.959**" in at.tabs[1].markdown[0].value
 
 
 def test_app_runs_evaluation(app):
