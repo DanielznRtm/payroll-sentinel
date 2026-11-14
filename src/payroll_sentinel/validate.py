@@ -92,13 +92,18 @@ def _diagnose(ratio: float) -> tuple[str, str]:
     return "statistical_outlier", "warn"
 
 
+def full_time_equivalent(salary: pd.Series, weekly_hours: pd.Series) -> pd.Series:
+    """Scale part-time salaries to 44 h/week (40 h and 44 h both count as full time)."""
+    hours = pd.to_numeric(weekly_hours, errors="coerce").fillna(FULL_TIME_HOURS)
+    return salary * np.where(hours < 36, FULL_TIME_HOURS / hours.clip(lower=1), 1.0)
+
+
 def statistical_checks(df: pd.DataFrame, families: pd.Series, levels: pd.Series,
                        seed: int = 0) -> tuple[pd.DataFrame, list[dict]]:
     salary = pd.to_numeric(df["monthly_salary"], errors="coerce")
     eligible = salary.ge(DECIMAL_SHIFT_CEILING) & families.notna() & levels.notna()
-    # Compare part-time contracts on a full-time-equivalent basis (40h and 44h are both full time).
-    hours = pd.to_numeric(df["weekly_hours"], errors="coerce").fillna(FULL_TIME_HOURS)
-    fte = salary * np.where(hours < 36, FULL_TIME_HOURS / hours.clip(lower=1), 1.0)
+    # Compare part-time contracts on a full-time-equivalent basis.
+    fte = full_time_equivalent(salary, df["weekly_hours"])
     work = pd.DataFrame({"row_id": df["row_id"], "log_s": np.log(fte.where(eligible)),
                          "family": families, "level": levels})[eligible].copy()
     work["group"] = work["family"].astype(str) + "/" + work["level"].astype(str)

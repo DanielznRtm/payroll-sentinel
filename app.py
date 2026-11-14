@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from payroll_sentinel.ask import MIN_RECORDS, ask, build_benchmark
 from payroll_sentinel.generate import generate
 from payroll_sentinel.pipeline import (REQUIRED_COLUMNS, missing_columns, run_evaluation,
                                        validate_submissions)
@@ -194,6 +195,41 @@ def upload_tab() -> None:
     show_validation(result, key="upload")
 
 
+@st.cache_data(show_spinner=False)
+def cached_benchmark() -> pd.DataFrame:
+    return build_benchmark()
+
+
+def ask_tab() -> None:
+    st.write("Ask a question in Portuguese or English about the validated synthetic benchmark "
+             "(seed 42, 25 companies), for example *qual a mediana de analista de dados sênior "
+             "em Campinas?*")
+    st.caption("The LLM only turns your question into a fixed-format query (filters, grouping, "
+               "metric). The code checks every field against allow-lists and computes every "
+               f"number; it never runs text written by the LLM. Answers use only approved rows, "
+               f"with full-time-equivalent salaries, and need at least {MIN_RECORDS} records.")
+    question = st.text_input("Question", key="question", max_chars=500)
+    if st.button("Ask", type="primary", key="ask") and question.strip():
+        from payroll_sentinel.llm import LLMClient
+        try:
+            with st.spinner("Translating the question and computing the answer..."):
+                st.session_state["ask_result"] = ask(question, cached_benchmark(), LLMClient.from_env())
+        except Exception as exc:  # LLM key, network or rate-limit problems
+            st.error(f"The LLM call failed: {exc}")
+            return
+    result = st.session_state.get("ask_result")
+    if result is None:
+        return
+    st.info(result.text)
+    if result.answer is not None and result.answer.groups is not None:
+        st.dataframe(result.answer.groups, hide_index=True)
+    if result.query is not None:
+        with st.expander("Query checked and run by the code"):
+            st.json(result.query.to_dict())
+    if result.error:
+        st.caption(f"Rejected LLM output: {result.error}")
+
+
 def llm_results_tab() -> None:
     st.caption("Saved report from one real run (seed 42, 25 companies) with titles normalized by "
                "`gemini-3.5-flash-lite`. It is a file from the repository, not a live LLM call.")
@@ -213,8 +249,13 @@ if DEMO:
     with tab_llm:
         llm_results_tab()
 else:
-    tab_eval, tab_upload = st.tabs(["Evaluation on synthetic data", "Validate a CSV"])
-    with tab_eval:
+    # The question tab needs an LLM key; without one (like the public demo) it is not shown.
+    names = ["Evaluation on synthetic data", "Validate a CSV"]
+    tabs = st.tabs(names + (["Ask the benchmark"] if llm_available() else []))
+    with tabs[0]:
         evaluation_tab(demo=False)
-    with tab_upload:
+    with tabs[1]:
         upload_tab()
+    if len(tabs) > 2:
+        with tabs[2]:
+            ask_tab()

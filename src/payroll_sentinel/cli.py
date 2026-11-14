@@ -5,15 +5,19 @@
     python -m payroll_sentinel.cli validate FILE  # validate your own CSV
     python -m payroll_sentinel.cli eval-titles FILE [--llm]  # score titles on a held-out file
     python -m payroll_sentinel.cli models         # model ids your LLM key can use
+    python -m payroll_sentinel.cli ask "QUESTION"  # question about the benchmark (needs an LLM)
+    python -m payroll_sentinel.cli eval-ask FILE   # score ask on eval/questions.csv (needs an LLM)
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
 
+from .ask import QuestionsError, ask, build_benchmark, run_ask_eval
 from .pipeline import run_evaluation, validate_submissions
 from .titles_eval import HeldoutError, evaluate_titles, load_heldout
 
@@ -70,6 +74,31 @@ def cmd_models(args) -> None:
         print(model)
 
 
+def cmd_ask(args) -> None:
+    from .llm import LLMClient
+    result = ask(args.question, build_benchmark(args.seed, args.companies), LLMClient.from_env())
+    print(result.text)
+    if result.answer is not None and result.answer.groups is not None:
+        print(result.answer.groups.to_string(index=False))
+    if result.query is not None:
+        print(f"\nQuery: {json.dumps(result.query.to_dict(), ensure_ascii=False)}")
+    if result.error:
+        print(f"\nRejected LLM output: {result.error}")
+
+
+def cmd_eval_ask(args) -> None:
+    try:
+        tag, report = run_ask_eval(args.file)
+    except QuestionsError as exc:
+        raise SystemExit(f"{args.file} is not ready:\n{exc}")
+    out = Path(args.reports)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"ask_eval_{tag}.md"
+    path.write_text(report, encoding="utf-8")
+    print(report)
+    print(f"Report written to {path}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="payroll_sentinel")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -93,6 +122,15 @@ def main() -> None:
     ttl.add_argument("--reports", default="reports")
     ttl.set_defaults(func=cmd_eval_titles)
     sub.add_parser("models", help="list the models your LLM key can use").set_defaults(func=cmd_models)
+    q = sub.add_parser("ask", help="ask a question about the validated benchmark (needs an LLM)")
+    q.add_argument("question")
+    q.add_argument("--seed", type=int, default=42)
+    q.add_argument("--companies", type=int, default=25)
+    q.set_defaults(func=cmd_ask)
+    qe = sub.add_parser("eval-ask", help="score ask on a questions file (needs an LLM)")
+    qe.add_argument("file", help="CSV with columns question,expected_query")
+    qe.add_argument("--reports", default="reports")
+    qe.set_defaults(func=cmd_eval_ask)
     args = p.parse_args()
     args.func(args)
 

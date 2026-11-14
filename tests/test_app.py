@@ -28,6 +28,29 @@ def test_app_starts_without_errors(app):
     assert [t.label for t in app.tabs] == ["Evaluation on synthetic data", "Validate a CSV"]
 
 
+def test_ask_tab_needs_a_key_and_answers_with_the_code(monkeypatch):
+    import json
+
+    from payroll_sentinel.llm import LLMClient
+
+    class ScriptedClient:
+        def chat(self, system, user, json_mode=False):
+            return json.dumps({"in_scope": True, "metric": "count", "column": "monthly_salary",
+                               "filters": [{"column": "contract_type", "op": "eq", "value": "CLT"}]})
+
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setenv("LLM_API_KEY", "fake-key")
+    monkeypatch.setattr(LLMClient, "from_env", classmethod(lambda cls: ScriptedClient()))
+    at = AppTest.from_file(str(APP), default_timeout=120).run()
+    assert [t.label for t in at.tabs][-1] == "Ask the benchmark"
+    at.text_input(key="question").set_value("q1")
+    at.button(key="ask").click().run()
+    assert not at.exception
+    answer = at.tabs[2].info[0].value
+    assert answer.startswith("Number of records for contract_type = CLT:")
+    assert "approved records" in answer
+
+
 def test_demo_mode_hides_upload(monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "1")
     monkeypatch.setenv("LLM_API_KEY", "fake-key")   # even with a key, no LLM option in the demo
