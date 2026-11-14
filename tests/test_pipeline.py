@@ -231,3 +231,27 @@ def test_llm_client_tag_and_model_list(monkeypatch):
     body = {"data": [{"id": "b-model"}, {"id": "a-model"}]}
     monkeypatch.setattr("payroll_sentinel.llm.requests.get", lambda *a, **k: FakeResponse(200, body))
     assert client.list_models() == ["a-model", "b-model"]
+
+
+def test_annotate_submission_splits_accepted_rows_and_rows_to_fix(data, tmp_path, monkeypatch, capsys):
+    from payroll_sentinel import cli
+    from payroll_sentinel.pipeline import annotate_submission
+
+    submitted = data[0].drop(columns=["row_id"]).head(300)
+    result = validate_submissions(submitted)
+    annotated = annotate_submission(submitted, result)
+    assert list(annotated.columns) == ["row_id", *submitted.columns, "status", "issues"]
+    assert annotated["status"].tolist() == result.records["status"].tolist()
+    blocked = annotated[annotated["status"].eq("block")]
+    assert len(blocked) and blocked["issues"].ne("").all()       # every blocked row says why
+    assert annotated.loc[annotated["status"].eq("ok"), "issues"].eq("").all()
+
+    path = tmp_path / "file.csv"
+    submitted.to_csv(path, index=False)
+    monkeypatch.setattr("sys.argv", ["payroll_sentinel", "validate", str(path), "--reports", str(tmp_path)])
+    cli.main()
+    accepted = pd.read_csv(tmp_path / "accepted_rows.csv")
+    to_fix = pd.read_csv(tmp_path / "rows_to_fix.csv")
+    assert len(accepted) + len(to_fix) == len(submitted)
+    assert set(to_fix["status"]) == {"block"} and "block" not in set(accepted["status"])
+    assert "rows to fix in" in capsys.readouterr().out

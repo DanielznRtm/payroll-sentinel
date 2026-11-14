@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from .ask import QuestionsError, ask, build_benchmark, run_ask_eval
-from .pipeline import run_evaluation, validate_submissions
+from .pipeline import annotate_submission, run_evaluation, validate_submissions
 from .titles_eval import HeldoutError, evaluate_titles, load_heldout
 
 
@@ -42,13 +42,19 @@ def cmd_run(args) -> None:
 
 def cmd_validate(args) -> None:
     out = Path(args.reports)
-    result = validate_submissions(pd.read_csv(args.file), use_llm=args.llm,
-                                  cache_path=out / "llm_title_cache.json")
+    df = pd.read_csv(args.file)
+    result = validate_submissions(df, use_llm=args.llm, cache_path=out / "llm_title_cache.json")
     out.mkdir(parents=True, exist_ok=True)
     result.issues.to_csv(out / "issues.csv", index=False)
     result.companies.to_csv(out / "companies.csv", index=False)
+    annotated = annotate_submission(df, result)
+    blocked = annotated["status"].eq("block")
+    annotated[~blocked].to_csv(out / "accepted_rows.csv", index=False)
+    annotated[blocked].to_csv(out / "rows_to_fix.csv", index=False)
     print(result.companies.to_string(index=False))
     print(f"\n{len(result.issues)} issues written to {out / 'issues.csv'}")
+    print(f"{int((~blocked).sum())} accepted rows (ok + warn) in {out / 'accepted_rows.csv'}, "
+          f"{int(blocked.sum())} rows to fix in {out / 'rows_to_fix.csv'}")
 
 
 def cmd_eval_titles(args) -> None:

@@ -57,6 +57,22 @@ def validate_submissions(df: pd.DataFrame, use_llm: bool = False,
     return validate(df, normalize_titles(df["job_title"], use_llm, cache_path))
 
 
+def annotate_submission(df: pd.DataFrame, result: ValidationResult) -> pd.DataFrame:
+    """The company's own rows plus `status` and `issues`, ready to send back.
+
+    Rows with status `block` must be fixed; `warn` rows enter the benchmark only
+    after human review; `ok` rows are accepted.
+    """
+    out = df.copy()
+    if "row_id" not in out.columns:  # same ids validate_submissions assigns
+        out.insert(0, "row_id", range(len(out)))
+    status = result.records.drop_duplicates("row_id").set_index("row_id")["status"]
+    messages = result.issues.groupby("row_id")["message"].agg(" | ".join)
+    out["status"] = out["row_id"].map(status)
+    out["issues"] = out["row_id"].map(messages).fillna("")
+    return out
+
+
 @dataclass
 class Evaluation:
     submitted: pd.DataFrame

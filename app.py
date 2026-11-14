@@ -22,8 +22,8 @@ import streamlit as st
 
 from payroll_sentinel.ask import MIN_RECORDS, ask, build_benchmark
 from payroll_sentinel.generate import generate
-from payroll_sentinel.pipeline import (REQUIRED_COLUMNS, missing_columns, run_evaluation,
-                                       validate_submissions)
+from payroll_sentinel.pipeline import (REQUIRED_COLUMNS, annotate_submission, missing_columns,
+                                       run_evaluation, validate_submissions)
 
 LLM_CACHE = Path("data") / "llm_title_cache.json"
 LLM_REPORT = Path(__file__).parent / "reports" / "evaluation_llm_gemini-3.5-flash-lite.md"
@@ -193,6 +193,20 @@ def upload_tab() -> None:
     m[3].metric("Companies to reject",
                 int(result.companies["decision"].str.startswith("REJECT").sum()))
     show_validation(result, key="upload")
+
+    st.subheader("Send back to the company")
+    annotated = annotate_submission(pd.read_csv(io.BytesIO(raw)), result)
+    blocked = annotated["status"].eq("block")
+    st.caption("Both files keep the company's own columns and add `status` and `issues`. "
+               "Accepted rows include `warn` rows, which enter the benchmark only after human "
+               "review. Rows to fix say why each one was blocked.")
+    d1, d2 = st.columns(2)
+    d1.download_button(f"Download accepted rows ({int((~blocked).sum()):,})",
+                       annotated[~blocked].to_csv(index=False), "accepted_rows.csv", "text/csv",
+                       key="dl_accepted")
+    d2.download_button(f"Download rows to fix ({int(blocked.sum()):,})",
+                       annotated[blocked].to_csv(index=False), "rows_to_fix.csv", "text/csv",
+                       key="dl_to_fix")
 
 
 @st.cache_data(show_spinner=False)
