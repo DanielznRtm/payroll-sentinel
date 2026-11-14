@@ -147,7 +147,7 @@ The full reports, including per-error-type numbers and company decisions, are in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 24 tests (2 skip without the [ui] extra)
+pytest                                                 # 25 tests (3 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 ```
 
@@ -155,7 +155,7 @@ python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same col
 
 ```bash
 pip install -e ".[ui]"
-streamlit run app.py      # then open http://localhost:8501
+streamlit run app.py --server.address localhost   # then open http://localhost:8501
 ```
 
 On Windows, double-click `run_ui.bat` instead: it starts the app from `.venv`
@@ -167,8 +167,15 @@ and opens the browser. The UI has two tabs:
 * **Validate a CSV**: upload your own file. Uploads always use the keyword rules,
   so payroll data is never sent to an LLM.
 
-The server only listens on `localhost` and Streamlit's usage statistics are off
-(`.streamlit/config.toml`).
+With `--server.address localhost` (also used by `run_ui.bat`) only this computer
+can open the app. Streamlit's usage statistics are off (`.streamlit/config.toml`).
+
+**Public demo mode.** Set `DEMO_MODE=1` as an environment variable or as a
+root-level key in Streamlit secrets. The upload tab and the LLM option disappear,
+runs are capped at 50 companies, and an **LLM results** tab shows the saved report
+`reports/evaluation_llm_gemini-3.5-flash-lite.md` instead of calling an LLM. This is
+how the app runs on Streamlit Community Cloud, which installs it from
+`requirements.txt`.
 
 ### Optional: LLM title normalization (free tiers)
 
