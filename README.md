@@ -3,8 +3,12 @@
 [![tests](https://github.com/DanielznRtm/payroll-sentinel/actions/workflows/tests.yml/badge.svg)](https://github.com/DanielznRtm/payroll-sentinel/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://payroll-sentinel.streamlit.app)
 
 **Validating salary data before it enters a compensation benchmark.**
+
+**[Try the live demo](https://payroll-sentinel.streamlit.app)**: no install needed. It runs on
+synthetic data only, and the saved LLM results replace live LLM calls.
 
 Salary benchmarks are built from payroll files that dozens of companies send in.
 One annual salary typed into the monthly field, one `8.500,00` read as `8,5`, or one
