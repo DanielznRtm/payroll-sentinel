@@ -1,11 +1,12 @@
 import json
+import re
 
 import pandas as pd
 import pytest
 
 from payroll_sentinel.evaluate import score
 from payroll_sentinel.generate import generate
-from payroll_sentinel.llm import LLMClient, LLMRequestError
+from payroll_sentinel.llm import LLMClient, LLMRequestError, LLMStats
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
 from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
 from payroll_sentinel.taxonomy import legal_min_wage
@@ -99,11 +100,15 @@ def test_parse_llm_batch_validates_output():
 
 class FakeClient:
     """Stands in for an LLM: answers every title as a senior product manager."""
+    model, tag = "fake-model", "fake_fake-model"
+
     def __init__(self):
         self.calls = 0
+        self.stats = LLMStats()
 
     def chat(self, system, user, json_mode=False):
         self.calls += 1
+        self.stats.calls += 1
         ids = [int(line.split(":")[0]) for line in user.splitlines()]
         return json.dumps({"results": [{"id": i, "family": "product_manager", "level": "senior"}
                                        for i in ids]})
@@ -183,6 +188,13 @@ def test_llm_report_states_coverage(monkeypatch, tmp_path):
     ev = run_evaluation(seed=1, n_companies=8, use_llm=True, cache_path=tmp_path / "c.json")
     assert ev.llm_coverage == 1.0
     assert "Titles answered by the LLM: 100.0%" in ev.report()
+    assert re.search(r"LLM run: [1-9][0-9]* LLM calls", ev.report())
+    assert ev.method == "LLM (fake-model)"
+    # one cache file per provider and model, never a shared one
+    assert (tmp_path / "c_fake_fake-model.json").exists()
+    assert not (tmp_path / "c.json").exists()
+    again = run_evaluation(seed=1, n_companies=8, use_llm=True, cache_path=tmp_path / "c.json")
+    assert "not a timing measurement" in again.report()   # all from cache: 0 calls
     assert run_evaluation(seed=1, n_companies=8).llm_coverage is None
 
 
@@ -193,3 +205,29 @@ def test_validate_submissions_without_row_id(data):
     assert "row_id" not in submitted.columns           # caller's frame is not modified
     assert len(result.records) == len(submitted)
     assert missing_columns(submitted.drop(columns=["hire_date"])) == ["hire_date"]
+
+
+class FakeResponse:
+    def __init__(self, status, body=None):
+        self.status_code, self.ok, self._body, self.text = status, status < 400, body, ""
+
+    def json(self):
+        return self._body
+
+
+def test_llm_client_counts_calls_retries_and_rate_limits(monkeypatch):
+    replies = iter([FakeResponse(429), FakeResponse(200, {"choices": [{"message": {"content": "hi"}}]})])
+    monkeypatch.setattr("payroll_sentinel.llm.requests.post", lambda *a, **k: next(replies))
+    monkeypatch.setattr("payroll_sentinel.llm.time.sleep", lambda s: None)
+    client = LLMClient(base_url="http://x", model="m", min_interval=0)
+    assert client.chat("s", "u") == "hi"
+    assert (client.stats.calls, client.stats.requests, client.stats.rate_limited) == (1, 2, 1)
+    assert "1 rate-limit (429) responses" in client.stats.summary()
+
+
+def test_llm_client_tag_and_model_list(monkeypatch):
+    client = LLMClient(base_url="http://x", model="llama3.1:8b", provider="ollama")
+    assert client.tag == "ollama_llama3.1-8b"          # ':' is not allowed in Windows file names
+    body = {"data": [{"id": "b-model"}, {"id": "a-model"}]}
+    monkeypatch.setattr("payroll_sentinel.llm.requests.get", lambda *a, **k: FakeResponse(200, body))
+    assert client.list_models() == ["a-model", "b-model"]

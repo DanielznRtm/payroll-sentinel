@@ -6,6 +6,7 @@ compute exactly the same numbers.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,12 +22,26 @@ REQUIRED_COLUMNS = ["company_id", "employee_id", "job_title", "contract_type",
                     "weekly_hours", "monthly_salary", "annual_bonus", "hire_date"]
 
 
+def llm_cache_path(cache_path: str | Path | None, client) -> Path | None:
+    """One cache file per provider and model, e.g. llm_title_cache_groq_openai-gpt-oss-20b.json.
+
+    The cache is keyed by title, so a shared file would let one model's answers
+    stand in for another's and contaminate a model comparison.
+    """
+    if cache_path is None:
+        return None
+    path = Path(cache_path)
+    return path.with_name(f"{path.stem}_{client.tag}{path.suffix}")
+
+
 def normalize_titles(titles: pd.Series, use_llm: bool = False,
-                     cache_path: str | Path | None = None) -> pd.DataFrame:
+                     cache_path: str | Path | None = None, client=None) -> pd.DataFrame:
     if not use_llm:
         return rule_normalize(titles)
-    from .llm import LLMClient
-    return llm_normalize(titles, LLMClient.from_env(), cache_path=cache_path)
+    if client is None:
+        from .llm import LLMClient
+        client = LLMClient.from_env()
+    return llm_normalize(titles, client, cache_path=llm_cache_path(cache_path, client))
 
 
 def missing_columns(df: pd.DataFrame) -> list[str]:
@@ -52,11 +67,14 @@ class Evaluation:
     titles: pd.DataFrame   # title normalization accuracy
     method: str
     llm_coverage: float | None = None  # share of non-empty titles the LLM answered (None: rules run)
+    llm_run: str | None = None         # calls, 429s and time of the LLM run (None: rules run)
 
     def report_lines(self) -> list[str]:
         s, so, md = self.score, self.oracle_score, (lambda df: df.to_markdown(index=False))
         coverage = [] if self.llm_coverage is None else [
             f"Titles answered by the LLM: {self.llm_coverage:.1%} (the rest fell back to keyword rules).", ""]
+        if self.llm_run:
+            coverage += [f"LLM run: {self.llm_run}.", ""]
         return [
             "# Evaluation report", "",
             f"{len(self.submitted)} records from {self.submitted['company_id'].nunique()} companies; "
@@ -90,7 +108,13 @@ def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
                    cache_path: str | Path | None = None) -> Evaluation:
     """Generate synthetic data with planted errors, validate it and score it against the truth."""
     submitted, truth = generate(seed=seed, n_companies=n_companies)
-    norm = normalize_titles(submitted["job_title"], use_llm, cache_path)
+    client = None
+    if use_llm:
+        from .llm import LLMClient
+        client = LLMClient.from_env()
+    start = time.perf_counter()
+    norm = normalize_titles(submitted["job_title"], use_llm, cache_path, client)
+    seconds = time.perf_counter() - start
     oracle = truth[["true_family", "true_level"]].rename(
         columns={"true_family": "family", "true_level": "level"})
     oracle.loc[submitted["job_title"].fillna("").astype(str).str.strip().eq(""), ["family", "level"]] = None
@@ -102,6 +126,14 @@ def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
         submitted=submitted, truth=truth, result=result,
         score=score(result, truth), oracle_score=score(result_oracle, truth),
         titles=title_accuracy(norm, truth, submitted["job_title"]),
-        method="LLM" if use_llm else "keyword rules",
+        method=f"LLM ({client.model})" if use_llm else "keyword rules",
         llm_coverage=float(norm.loc[has_title, "source"].eq("llm").mean()) if use_llm else None,
+        llm_run=_llm_run(client, seconds) if use_llm else None,
     )
+
+
+def _llm_run(client, seconds: float) -> str:
+    text = f"{client.stats.summary()}; title normalization took {seconds:.1f} s in total"
+    if client.stats.calls == 0:
+        text += " (every title came from the cache, so this is not a timing measurement)"
+    return text

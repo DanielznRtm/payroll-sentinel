@@ -13,8 +13,9 @@ Switching provider is an environment variable, not a code change.
 from __future__ import annotations
 
 import os
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 
@@ -31,15 +32,36 @@ class LLMRequestError(RuntimeError):
 
 
 @dataclass
+class LLMStats:
+    """What one run cost: answered calls, HTTP requests (with retries), 429s and time."""
+    calls: int = 0
+    requests: int = 0
+    rate_limited: int = 0
+    seconds: float = 0.0
+
+    def summary(self) -> str:
+        mean = f"{self.seconds / self.calls:.1f} s" if self.calls else "n/a"
+        return (f"{self.calls} LLM calls ({self.requests} HTTP requests, {self.rate_limited} "
+                f"rate-limit (429) responses), {self.seconds:.1f} s in LLM calls, {mean} per call")
+
+
+@dataclass
 class LLMClient:
     base_url: str
     model: str
     api_key: str = ""
+    provider: str = "custom"
     timeout: float = 60.0
     max_retries: int = 4
     min_interval: float = 4.5  # seconds between calls: stays under ~15 req/min free tiers
 
     _last_call: float = 0.0
+    stats: LLMStats = field(default_factory=LLMStats)
+
+    @property
+    def tag(self) -> str:
+        """Provider and model as a file-name-safe string, e.g. 'gemini_gemini-3.5-flash-lite'."""
+        return re.sub(r"[^A-Za-z0-9._-]+", "-", f"{self.provider}_{self.model}").strip("-")
 
     @classmethod
     def from_env(cls) -> "LLMClient":
@@ -51,8 +73,16 @@ class LLMClient:
         if provider != "ollama" and not key:
             raise RuntimeError(f"Set LLM_API_KEY for provider '{provider}'.")
         return cls(base_url=os.getenv("LLM_BASE_URL", base_url),
-                   model=os.getenv("LLM_MODEL", model), api_key=key,
+                   model=os.getenv("LLM_MODEL", model), api_key=key, provider=provider,
                    min_interval=0.0 if provider == "ollama" else 4.5)
+
+    def list_models(self) -> list[str]:
+        """Model ids this key can use (OpenAI-compatible GET /models)."""
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        resp = requests.get(f"{self.base_url.rstrip('/')}/models", headers=headers, timeout=self.timeout)
+        if not resp.ok:
+            raise LLMRequestError(f"HTTP {resp.status_code} listing models: {resp.text[:500]}")
+        return sorted(m["id"] for m in resp.json().get("data", []))
 
     def chat(self, system: str, user: str, json_mode: bool = False) -> str:
         payload = {
@@ -64,17 +94,25 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
-        for attempt in range(self.max_retries):
-            wait = self.min_interval - (time.monotonic() - self._last_call)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_call = time.monotonic()
-            resp = requests.post(f"{self.base_url.rstrip('/')}/chat/completions",
-                                 json=payload, headers=headers, timeout=self.timeout)
-            if resp.status_code in (429, 500, 502, 503):  # rate limit / transient
-                time.sleep(2 ** attempt * 5)
-                continue
-            if not resp.ok:  # keep the provider's explanation: it says why (model retired, bad key...)
-                raise LLMRequestError(f"HTTP {resp.status_code} for model '{self.model}': {resp.text[:500]}")
-            return resp.json()["choices"][0]["message"]["content"]
-        raise RuntimeError(f"LLM call failed after {self.max_retries} retries (last {resp.status_code}).")
+        start = time.monotonic()
+        try:
+            for attempt in range(self.max_retries):
+                wait = self.min_interval - (time.monotonic() - self._last_call)
+                if wait > 0:
+                    time.sleep(wait)
+                self._last_call = time.monotonic()
+                self.stats.requests += 1
+                resp = requests.post(f"{self.base_url.rstrip('/')}/chat/completions",
+                                     json=payload, headers=headers, timeout=self.timeout)
+                if resp.status_code in (429, 500, 502, 503):  # rate limit / transient
+                    self.stats.rate_limited += resp.status_code == 429
+                    time.sleep(2 ** attempt * 5)
+                    continue
+                if not resp.ok:  # keep the provider's explanation: it says why (model retired, bad key...)
+                    raise LLMRequestError(
+                        f"HTTP {resp.status_code} for model '{self.model}': {resp.text[:500]}")
+                self.stats.calls += 1
+                return resp.json()["choices"][0]["message"]["content"]
+            raise RuntimeError(f"LLM call failed after {self.max_retries} retries (last {resp.status_code}).")
+        finally:
+            self.stats.seconds += time.monotonic() - start

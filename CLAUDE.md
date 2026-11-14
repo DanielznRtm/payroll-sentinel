@@ -67,8 +67,9 @@ Baseline (seed 42, keyword rules): precision 0.96, recall 0.884, F1 0.92. With
 perfect titles, recall is 0.967, so title normalization is the main lever.
 LLM titles (`gemini-3.5-flash-lite`, one run, seed 42): precision 0.959, recall
 0.967, F1 0.963; report in `reports/evaluation_llm_gemini-3.5-flash-lite.md`.
-The LLM title cache is keyed by title only, so use a separate `--data` folder per
-model when comparing models.
+The LLM title cache has one file per provider and model
+(`data/llm_title_cache_<provider>_<model>.json`), so models never share answers;
+`run --llm --no-cache` times a model, and every LLM report states calls, 429s and time.
 
 ## Roadmap
 

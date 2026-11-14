@@ -13,6 +13,7 @@ warning for human review.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -151,11 +152,14 @@ class TitleEval:
     method: str                    # shown in the report
     slug: str                      # used in the report file name
     llm_coverage: float | None = None
+    llm_run: str | None = None
 
     def report(self, source: str) -> str:
         s, md = summarize(self.rows), _markdown
         coverage = [] if self.llm_coverage is None else [
             f"Titles answered by the LLM: {self.llm_coverage:.1%} (the rest fell back to keyword rules).", ""]
+        if self.llm_run:
+            coverage += [f"LLM run: {self.llm_run}.", ""]
         errors = s["errors"][["title", "expected_family", "expected_level", "predicted_family",
                               "predicted_level", "error"]].fillna("-")
         return "\n".join([
@@ -193,6 +197,9 @@ def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False) -> TitleEval:
         return TitleEval(compare(gold, rule_normalize(gold["title"])), "keyword rules", "rules")
     from .llm import LLMClient
     client = LLMClient.from_env()
+    start = time.perf_counter()
     pred = llm_normalize(gold["title"], client)
+    seconds = time.perf_counter() - start
     return TitleEval(compare(gold, pred), f"LLM ({client.model})", f"llm_{_slug(client.model)}",
-                     llm_coverage=float(pred["source"].eq("llm").mean()))
+                     llm_coverage=float(pred["source"].eq("llm").mean()),
+                     llm_run=f"{client.stats.summary()}; {seconds:.1f} s in total")

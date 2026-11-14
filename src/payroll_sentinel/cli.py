@@ -4,6 +4,7 @@
     python -m payroll_sentinel.cli run --llm      # same, titles normalized by an LLM (see llm.py)
     python -m payroll_sentinel.cli validate FILE  # validate your own CSV
     python -m payroll_sentinel.cli eval-titles FILE [--llm]  # score titles on a held-out file
+    python -m payroll_sentinel.cli models         # model ids your LLM key can use
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ def cmd_run(args) -> None:
     reports.mkdir(parents=True, exist_ok=True)
 
     ev = run_evaluation(seed=args.seed, n_companies=args.companies, use_llm=args.llm,
-                        cache_path=data / "llm_title_cache.json")
+                        cache_path=None if args.no_cache else data / "llm_title_cache.json")
     ev.submitted.to_csv(data / "submissions.csv", index=False)
     ev.truth.to_csv(data / "ground_truth.csv", index=False)
     ev.result.issues.to_csv(reports / "issues.csv", index=False)
@@ -61,6 +62,14 @@ def cmd_eval_titles(args) -> None:
     print(f"Report written to {path}")
 
 
+def cmd_models(args) -> None:
+    from .llm import LLMClient
+    client = LLMClient.from_env()
+    print(f"Models for provider '{client.provider}' (current: {client.model}):")
+    for model in client.list_models():
+        print(model)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="payroll_sentinel")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -70,6 +79,8 @@ def main() -> None:
     run.add_argument("--llm", action="store_true", help="normalize titles with an LLM")
     run.add_argument("--data", default="data")
     run.add_argument("--reports", default="reports")
+    run.add_argument("--no-cache", action="store_true",
+                     help="ask the LLM for every title (use it to time a model)")
     run.set_defaults(func=cmd_run)
     val = sub.add_parser("validate", help="validate a CSV file")
     val.add_argument("file")
@@ -81,6 +92,7 @@ def main() -> None:
     ttl.add_argument("--llm", action="store_true", help="normalize titles with an LLM (no cache)")
     ttl.add_argument("--reports", default="reports")
     ttl.set_defaults(func=cmd_eval_titles)
+    sub.add_parser("models", help="list the models your LLM key can use").set_defaults(func=cmd_models)
     args = p.parse_args()
     args.func(args)
 

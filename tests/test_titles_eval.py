@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from payroll_sentinel import cli
-from payroll_sentinel.llm import LLMClient
+from payroll_sentinel.llm import LLMClient, LLMStats
 from payroll_sentinel.taxonomy import FAMILIES
 from payroll_sentinel.titles_eval import HeldoutError, compare, load_heldout, summarize
 
@@ -25,6 +25,7 @@ class ScriptedClient:
 
     def __init__(self, answers):
         self.answers = answers
+        self.stats = LLMStats()
 
     def chat(self, system, user, json_mode=False):
         results = []
@@ -122,6 +123,7 @@ def test_eval_titles_with_llm_uses_the_client_and_no_cache(tmp_path, monkeypatch
     assert "Normalizer: **LLM (llama3.1:8b)**" in report
     assert "Titles answered by the LLM: 100.0%" in report
     assert "No errors." in report
+    assert "LLM run: 0 LLM calls" in report         # the scripted client does not count calls
     assert not (tmp_path / "data").exists()         # nothing cached on disk
 
 
