@@ -220,6 +220,68 @@ ambiguous during the review. As with the titles, the prompt was not changed afte
 these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
 [`reports/ask_eval_gemini_gemini-3.5-flash-lite.md`](reports/ask_eval_gemini_gemini-3.5-flash-lite.md).
 
+### Public salary data (no ground truth)
+
+Synthetic data only tests the errors I planted, so I also ran the pipeline on two
+public salary files downloaded from Kaggle. They are not in the repository, and
+[`scripts/public_data_check.py`](scripts/public_data_check.py) takes their paths:
+
+* `Salary_Dataset_DataScienceLovers.csv`: 22,770 rows of Indian tech salaries by
+  company, title and city (INR, annual);
+* `Salary_Data.csv`: 6,704 rows with title, education, experience and salary
+  (USD, annual). Its age and gender columns are never read.
+
+Only job titles were sent to the LLM. Neither file has labeled errors, so this is a
+case study, not a benchmark. One run of `gemini-3.5-flash-lite`: 30 calls, one
+rate-limit (429) response, 172 s. Report:
+[`reports/public_data_gemini_gemini-3.5-flash-lite.md`](reports/public_data_gemini_gemini-3.5-flash-lite.md).
+
+**Titles.** The Indian file tags every row with a software job role, a weak label:
+
+| Metric | Keyword rules | LLM titles |
+|---|---|---|
+| Developer rows mapped to software engineer (20,165 rows, 9 roles) | 3.1 % | **99.4 %** |
+| Distinct developer titles mapped to software engineer (885) | 10.1 % | **95.8 %** |
+| US-style rows with any family (many titles, such as marketing, are outside the taxonomy) | 39.0 % | 68.3 % |
+| Intern rows given level intern (2,106) | 100 % | 100 % |
+
+Most LLM "errors" against the weak label are errors of the label. The roles seem
+to be assigned by keyword, so `Mobile Repair Technician` sits under *Mobile* and
+`Front End Cashier` under *Frontend*. The LLM mapped the first to maintenance
+technician and left the cashier unmapped. A keyword label shares the blind spots
+of keyword rules, so 95.8 % is a floor. Single runs vary here too: an earlier run
+of the same model left `Database Administrator` unmapped, and this one mapped it
+to software engineer.
+
+**Validation.** With LLM titles, 99.4 % of the Indian rows reach the peer
+comparison, against 2.7 % with keyword rules. The validator found:
+
+* in the US-style file, 5 missing salaries, 2 missing titles and 4 annual
+  salaries of US$ 350 to 579, all blocked. 6,005 of its 6,704 rows sit in groups
+  that repeat title, education, experience and salary;
+* in the Indian file, 15 salaries more than 30× away from their peers, from
+  90 million INR (180×) to developers paid 12,000 INR a year (1/40 to 1/77 of
+  their peers). Another 113
+  are 6 to 30 times below their peers, the mirror image of an annual value typed
+  as monthly: most likely monthly salaries in the annual field.
+
+The real files also showed three weaknesses that the synthetic data could not.
+All three are now fixed, and precision and recall stayed the same on seeds 7, 42
+and 123:
+
+1. Values about 1/12 of their peers were diagnosed as wrong levels. The diagnosis
+   now works both ways (`divided_by_12`).
+2. Senior salaries at large companies, 6 to 7 times the market median, were
+   blocked as typos. The 6–9× band now goes to review (8 rows here).
+3. Rows copied under a new employee ID passed unnoticed. They now get a
+   `duplicate_record` warning (6,005 rows in the US-style file, 64 in the Indian
+   one).
+
+Two limits remain. Rejecting a company above 5 % blocked rows does not fit a file
+with one to three rows per company: 118 of 11,261 were rejected. The taxonomy also
+has no level above lead, so the LLM puts managers and directors at senior or lead
+inconsistently.
+
 ## What I learned
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
@@ -248,6 +310,11 @@ these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
    titles could not finish a full run without rate limits, and a weaker model
    scored below plain rules on titles the rules already knew. A model is only as
    good as the share of the job it can do inside the quota.
+7. **Real data finds the errors you did not plant.** The synthetic set measured
+   the errors I imagined. Two public files showed three I had not: monthly
+   salaries in an annual field, legitimate top pay that looked like a typo, and
+   rows copied under new IDs. Each fix was measured on the synthetic set first,
+   so it could not quietly break what already worked.
 
 ## Run it
 
@@ -255,7 +322,7 @@ these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 64 tests (4 skip without the [ui] extra)
+pytest                                                 # 75 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```
@@ -364,6 +431,7 @@ src/payroll_sentinel/
   ask.py        questions over the benchmark: checked JSON query, pandas execution, evaluation
   cli.py        run, validate, eval-titles, ask, eval-ask and models commands
 eval/           hand-written ground truth: held-out titles and questions
+scripts/        public_data_check.py: titles and full validation on two public salary files
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```

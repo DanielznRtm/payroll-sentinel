@@ -74,6 +74,10 @@ Model comparison (README "Comparing models", reports in `reports/models/`): flas
 is the default; `gemini-3.5-flash` is better on real titles but hits free-tier 429s;
 Groq `openai/gpt-oss-20b` needs `LLM_REASONING_EFFORT=low` (optional env var, sent
 only when set) and abstains too often. Ollama is not measured (no NVIDIA GPU).
+`scripts/public_data_check.py` runs titles and the full validator on two public
+Kaggle salary files (paths passed in; the files are never committed, Age/Gender are
+never read, only titles reach the LLM); it led to the symmetric unit-error diagnosis
+(`divided_by_12`, `extreme_value`, 6-9x to review) and the `duplicate_record` rule.
 
 ## Roadmap
 
