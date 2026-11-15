@@ -33,16 +33,25 @@ class LLMRequestError(RuntimeError):
 
 @dataclass
 class LLMStats:
-    """What one run cost: answered calls, HTTP requests (with retries), 429s and time."""
+    """What one run cost: answered calls, HTTP requests (with retries), 429s and time.
+
+    `seconds` is wall time inside chat(), including the pause between calls that
+    keeps us under free-tier limits; `api_seconds` is only the time spent waiting
+    for HTTP responses, so it compares how fast models are.
+    """
     calls: int = 0
     requests: int = 0
     rate_limited: int = 0
     seconds: float = 0.0
+    api_seconds: float = 0.0
 
     def summary(self) -> str:
         mean = f"{self.seconds / self.calls:.1f} s" if self.calls else "n/a"
+        api_mean = f"{self.api_seconds / self.requests:.1f} s" if self.requests else "n/a"
         return (f"{self.calls} LLM calls ({self.requests} HTTP requests, {self.rate_limited} "
-                f"rate-limit (429) responses), {self.seconds:.1f} s in LLM calls, {mean} per call")
+                f"rate-limit (429) responses), {self.seconds:.1f} s in LLM calls, {mean} per call; "
+                f"{self.api_seconds:.1f} s waiting for the API ({api_mean} per request), the rest "
+                "is pacing and retry back-off")
 
 
 @dataclass
@@ -102,8 +111,12 @@ class LLMClient:
                     time.sleep(wait)
                 self._last_call = time.monotonic()
                 self.stats.requests += 1
-                resp = requests.post(f"{self.base_url.rstrip('/')}/chat/completions",
-                                     json=payload, headers=headers, timeout=self.timeout)
+                sent = time.monotonic()
+                try:
+                    resp = requests.post(f"{self.base_url.rstrip('/')}/chat/completions",
+                                         json=payload, headers=headers, timeout=self.timeout)
+                finally:
+                    self.stats.api_seconds += time.monotonic() - sent
                 if resp.status_code in (429, 500, 502, 503):  # rate limit / transient
                     self.stats.rate_limited += resp.status_code == 429
                     time.sleep(2 ** attempt * 5)

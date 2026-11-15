@@ -225,6 +225,24 @@ def test_llm_client_counts_calls_retries_and_rate_limits(monkeypatch):
     assert "1 rate-limit (429) responses" in client.stats.summary()
 
 
+def test_llm_stats_separate_api_time_from_pacing(monkeypatch):
+    clock = {"t": 100.0}                                  # fake clock: no real waiting
+
+    def post(*args, **kwargs):
+        clock["t"] += 2.0                                 # each API response takes 2 s
+        return FakeResponse(200, {"choices": [{"message": {"content": "hi"}}]})
+
+    monkeypatch.setattr("payroll_sentinel.llm.requests.post", post)
+    monkeypatch.setattr("payroll_sentinel.llm.time.sleep", lambda s: clock.update(t=clock["t"] + s))
+    monkeypatch.setattr("payroll_sentinel.llm.time.monotonic", lambda: clock["t"])
+    client = LLMClient(base_url="http://x", model="m", min_interval=4.5)
+    client.chat("s", "u")
+    client.chat("s", "u")                                 # waits 2.5 s to keep 4.5 s between calls
+    assert client.stats.api_seconds == pytest.approx(4.0)
+    assert client.stats.seconds == pytest.approx(6.5)
+    assert "4.0 s waiting for the API (2.0 s per request)" in client.stats.summary()
+
+
 def test_llm_client_tag_and_model_list(monkeypatch):
     client = LLMClient(base_url="http://x", model="llama3.1:8b", provider="ollama")
     assert client.tag == "ollama_llama3.1-8b"          # ':' is not allowed in Windows file names
