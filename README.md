@@ -222,18 +222,22 @@ these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
 
 ### Public salary data (no ground truth)
 
-Synthetic data only tests the errors I planted, so I also ran the pipeline on two
-public salary files downloaded from Kaggle. They are not in the repository, and
+Synthetic data only tests the errors I planted, so I also ran the pipeline on
+three public salary files. They are not in the repository, and
 [`scripts/public_data_check.py`](scripts/public_data_check.py) takes their paths:
 
-* `Salary_Dataset_DataScienceLovers.csv`: 22,770 rows of Indian tech salaries by
-  company, title and city (INR, annual);
-* `Salary_Data.csv`: 6,704 rows with title, education, experience and salary
-  (USD, annual). Its age and gender columns are never read.
+* `Salary_Dataset_DataScienceLovers.csv` (Kaggle): 22,770 rows of Indian tech
+  salaries by company, title and city (INR, annual);
+* `Salary_Data.csv` (Kaggle): 6,704 rows with title, education, experience and
+  salary (USD, annual). Its age and gender columns are never read;
+* [`datapizza-ai-lab/salaries`](https://huggingface.co/datasets/datapizza-ai-lab/salaries)
+  (Hugging Face, CC BY-NC 4.0): 26,551 answers to an Italian tech salary survey
+  (EUR, annual), with a `valid` flag set by the publisher. Its age, gender and
+  submission-time columns are never given to the validator.
 
-Only job titles were sent to the LLM. Neither file has labeled errors, so this is a
-case study, not a benchmark. One run of `gemini-3.5-flash-lite`: 30 calls, one
-rate-limit (429) response, 172 s. Report:
+Only job titles were sent to the LLM. No file has labeled salary errors, so this is
+a case study, not a benchmark. One run of `gemini-3.5-flash-lite` on 1,387 distinct
+titles: 32 calls, no rate-limit (429) response, 147 s. Report:
 [`reports/public_data_gemini_gemini-3.5-flash-lite.md`](reports/public_data_gemini_gemini-3.5-flash-lite.md).
 
 **Titles.** The Indian file tags every row with a software job role, a weak label:
@@ -241,29 +245,49 @@ rate-limit (429) response, 172 s. Report:
 | Metric | Keyword rules | LLM titles |
 |---|---|---|
 | Developer rows mapped to software engineer (20,165 rows, 9 roles) | 3.1 % | **99.4 %** |
-| Distinct developer titles mapped to software engineer (885) | 10.1 % | **95.8 %** |
-| US-style rows with any family (many titles, such as marketing, are outside the taxonomy) | 39.0 % | 68.3 % |
+| Distinct developer titles mapped to software engineer (885) | 10.1 % | **96.0 %** |
 | Intern rows given level intern (2,106) | 100 % | 100 % |
+| US-style rows with any family (no labels; many titles, such as marketing, are outside the taxonomy) | 39.0 % | 73.4 % |
+| Italian rows with any family (no labels; 117 job categories) | 15.6 % | 66.3 % |
 
 Most LLM "errors" against the weak label are errors of the label. The roles seem
 to be assigned by keyword, so `Mobile Repair Technician` sits under *Mobile* and
 `Front End Cashier` under *Frontend*. The LLM mapped the first to maintenance
 technician and left the cashier unmapped. A keyword label shares the blind spots
-of keyword rules, so 95.8 % is a floor. Single runs vary here too: an earlier run
-of the same model left `Database Administrator` unmapped, and this one mapped it
-to software engineer.
+of keyword rules, so 96.0 % is a floor. Single runs vary here too: the previous
+run (report in the git history) mapped 92.8 % of the distinct Testing titles to
+software engineer, and this one 76.8 %, leaving `QA Tester` unmapped.
 
-**Validation.** With LLM titles, 99.4 % of the Indian rows reach the peer
+**Validation.** With LLM titles, 99.2 % of the Indian rows reach the peer
 comparison, against 2.7 % with keyword rules. The validator found:
 
 * in the US-style file, 5 missing salaries, 2 missing titles and 4 annual
   salaries of US$ 350 to 579, all blocked. 6,005 of its 6,704 rows sit in groups
   that repeat title, education, experience and salary;
-* in the Indian file, 15 salaries more than 30× away from their peers, from
+* in the Indian file, 16 salaries more than 30× away from their peers, from
   90 million INR (180×) to developers paid 12,000 INR a year (1/40 to 1/77 of
-  their peers). Another 113
-  are 6 to 30 times below their peers, the mirror image of an annual value typed
-  as monthly: most likely monthly salaries in the annual field.
+  their peers). Another 111 are 6 to 30 times below their peers, the mirror image
+  of an annual value typed as monthly: most likely monthly salaries in the annual
+  field;
+* in the Italian survey, 344 answers repeated word for word, and one with 24,126
+  months (2,010 years) of experience, whose hire date became impossible.
+
+**Against the publisher's own flag.** The Italian `valid` flag marks 84 answers
+invalid, but their salaries look normal: the validator flags only 3 of them. Several
+look like the same person answering twice within minutes, with different values,
+which a row-by-row check cannot see. In the other direction, the publisher kept
+answers that the validator does question:
+
+| Answers the publisher marks valid | Blocked | Sent to review | No issue |
+|---|---|---|---|
+| Annual salary under €10,000 (139) | 8 | 83 | 48 |
+| Annual salary over €200,000 (29), up to €1,000,000 | 16 | 6 | 7 |
+| Everything else (26,299) | 0 | 560 | 25,739 |
+
+The two checks complement each other: "valid" depends on what is being checked.
+Here every job title lacks seniority, so all rows count as `mid`, and most of the
+293 level warnings in this file only reflect juniors and seniors in one peer
+group.
 
 The real files also showed three weaknesses that the synthetic data could not.
 All three are now fixed, and precision and recall stayed the same on seeds 7, 42
@@ -272,15 +296,14 @@ and 123:
 1. Values about 1/12 of their peers were diagnosed as wrong levels. The diagnosis
    now works both ways (`divided_by_12`).
 2. Senior salaries at large companies, 6 to 7 times the market median, were
-   blocked as typos. The 6–9× band now goes to review (8 rows here).
+   blocked as typos. The 6–9× band now goes to review (8 Indian rows).
 3. Rows copied under a new employee ID passed unnoticed. They now get a
-   `duplicate_record` warning (6,005 rows in the US-style file, 64 in the Indian
-   one).
+   `duplicate_record` warning (6,005 US-style rows, 344 Italian, 64 Indian).
 
 Two limits remain. Rejecting a company above 5 % blocked rows does not fit a file
-with one to three rows per company: 118 of 11,261 were rejected. The taxonomy also
-has no level above lead, so the LLM puts managers and directors at senior or lead
-inconsistently.
+with one to three rows per company: 121 of 11,261 Indian companies were rejected.
+The taxonomy also has no level above lead, so the LLM puts managers and directors
+at senior or lead inconsistently.
 
 ## What I learned
 
@@ -311,7 +334,7 @@ inconsistently.
    scored below plain rules on titles the rules already knew. A model is only as
    good as the share of the job it can do inside the quota.
 7. **Real data finds the errors you did not plant.** The synthetic set measured
-   the errors I imagined. Two public files showed three I had not: monthly
+   the errors I imagined. Public files showed three I had not: monthly
    salaries in an annual field, legitimate top pay that looked like a typo, and
    rows copied under new IDs. Each fix was measured on the synthetic set first,
    so it could not quietly break what already worked.
@@ -431,7 +454,7 @@ src/payroll_sentinel/
   ask.py        questions over the benchmark: checked JSON query, pandas execution, evaluation
   cli.py        run, validate, eval-titles, ask, eval-ask and models commands
 eval/           hand-written ground truth: held-out titles and questions
-scripts/        public_data_check.py: titles and full validation on two public salary files
+scripts/        public_data_check.py: titles and full validation on public salary files
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
