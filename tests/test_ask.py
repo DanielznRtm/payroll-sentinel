@@ -195,6 +195,12 @@ def test_cli_ask_and_eval_ask_with_a_fake_llm(tmp_path, monkeypatch, capsys):
     assert "No errors." in report
 
 
+def test_committed_questions_file_is_valid():
+    from pathlib import Path
+    questions = load_questions(Path(__file__).resolve().parents[1] / "eval" / "questions.csv")
+    assert questions["expected"].notna().any() and questions["expected"].isna().any()  # in and out of scope
+
+
 def test_cli_eval_ask_refuses_the_empty_template(monkeypatch, tmp_path):
     template = tmp_path / "questions.csv"
     template.write_text("question,expected_query\n", encoding="utf-8")
