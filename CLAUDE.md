@@ -81,8 +81,9 @@ only when set) and abstains too often. Ollama is not measured (no NVIDIA GPU).
    - the README model table (accuracy × latency × cost) has two Gemini models and
      Groq; a local Ollama model needs an NVIDIA GPU;
    - natural-language questions over the benchmark are built (`ask.py`): the LLM
-     only fills a fixed JSON query that the code validates and runs; measuring them
-     needs the hand-written `eval/questions.csv`.
+     only fills a fixed JSON query that the code validates and runs. Measured on
+     the user's 30 questions in `eval/questions.csv`: 27/30 right, 5/5 out-of-scope
+     refused (`gemini-3.5-flash-lite`, one run); the prompt was not tuned on them.
 2. **Module B, labor-claim triage:**
    - A shared deterministic engine `salary_core` computes net pay for CLT,
      contractor (PJ, Simples Nacional) and internship.

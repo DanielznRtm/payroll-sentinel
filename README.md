@@ -191,6 +191,32 @@ Reports: pipeline runs in [`reports/models/`](reports/models/); held-out runs in
 [flash](reports/titles_heldout_llm_gemini-3.5-flash.md) and
 [gpt-oss-20b](reports/titles_heldout_llm_openai-gpt-oss-20b.md).
 
+### Questions over the benchmark
+
+I wrote 30 questions in Portuguese, the way an HR client would ask them
+([`eval/questions.csv`](eval/questions.csv)). 25 are in scope, and 3 of those
+should get "not enough data". 5 are out of scope: a company ranking, raises over
+time, a gender gap, meal vouchers and hiring advice. The expected queries were
+filled in, reviewed and committed before the first run, and the code computes the
+right answers from them. One run of `gemini-3.5-flash-lite`:
+
+| Metric | Result |
+|---|---|
+| Right query (exact match) | 27 / 30 (90 %) |
+| Right answer | 27 / 30 (90 %) |
+| In-scope questions answered right | 22 / 25 (88 %) |
+| Out-of-scope questions refused | **5 / 5** |
+
+None of the three errors produced a wrong number. Two in-scope questions were
+refused: `coordenador de manutenção` and `HRBP sênior em Curitiba`. The prompt
+names neither "coordenador" as a lead level nor HRBP as an HR analyst, and the
+model refused instead of guessing (for HRBP the right answer was "not enough
+data": 4 records). The third, "devs e cientistas de dados em São Paulo", got one
+median per family instead of one for both together, a reading flagged as
+ambiguous during the review. As with the titles, the prompt was not changed after
+these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
+[`reports/ask_eval_gemini_gemini-3.5-flash-lite.md`](reports/ask_eval_gemini_gemini-3.5-flash-lite.md).
+
 ## What I learned
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
@@ -226,7 +252,7 @@ Reports: pipeline runs in [`reports/models/`](reports/models/); held-out runs in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 63 tests (4 skip without the [ui] extra)
+pytest                                                 # 64 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```
@@ -349,8 +375,9 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
   (97.4 % family accuracy) uses only 130 titles, labeled by one person.
 * Each model in the comparison ran once, on one seed. A local Ollama model is
   still unmeasured, because it needs an NVIDIA GPU.
-* Questions over the benchmark work, but their accuracy is not measured yet:
-  `eval/questions.csv` is waiting for hand-written questions.
+* The question evaluation is 30 questions written by one person, run once. Answers
+  use full-time-equivalent salaries, so an intern's 30 h stipend is shown scaled
+  to 44 h (about 1.47×).
 
 ## License
 
