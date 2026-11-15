@@ -200,6 +200,6 @@ def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False) -> TitleEval:
     start = time.perf_counter()
     pred = llm_normalize(gold["title"], client)
     seconds = time.perf_counter() - start
-    return TitleEval(compare(gold, pred), f"LLM ({client.model})", f"llm_{_slug(client.model)}",
+    return TitleEval(compare(gold, pred), f"LLM ({client.label})", f"llm_{_slug(client.model)}",
                      llm_coverage=float(pred["source"].eq("llm").mean()),
                      llm_run=f"{client.stats.summary()}; {seconds:.1f} s in total")

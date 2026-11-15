@@ -6,7 +6,7 @@ import pytest
 
 from payroll_sentinel.evaluate import score
 from payroll_sentinel.generate import generate
-from payroll_sentinel.llm import LLMClient, LLMRequestError, LLMStats
+from payroll_sentinel.llm import LLMClient, LLMOutputError, LLMRequestError, LLMStats
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
 from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
 from payroll_sentinel.taxonomy import legal_min_wage
@@ -100,7 +100,7 @@ def test_parse_llm_batch_validates_output():
 
 class FakeClient:
     """Stands in for an LLM: answers every title as a senior product manager."""
-    model, tag = "fake-model", "fake_fake-model"
+    model, tag, label = "fake-model", "fake_fake-model", "fake-model"
 
     def __init__(self):
         self.calls = 0
@@ -241,6 +241,48 @@ def test_llm_stats_separate_api_time_from_pacing(monkeypatch):
     assert client.stats.api_seconds == pytest.approx(4.0)
     assert client.stats.seconds == pytest.approx(6.5)
     assert "4.0 s waiting for the API (2.0 s per request)" in client.stats.summary()
+
+
+def test_llm_client_sends_reasoning_effort_only_when_set(monkeypatch):
+    sent = []
+
+    def post(*args, **kwargs):
+        sent.append(kwargs["json"])
+        return FakeResponse(200, {"choices": [{"message": {"content": "hi"}}]})
+
+    monkeypatch.setattr("payroll_sentinel.llm.requests.post", post)
+    plain = LLMClient(base_url="http://x", model="m", min_interval=0)
+    plain.chat("s", "u")
+    assert "reasoning_effort" not in sent[0]          # Gemini runs keep the exact payload
+    assert plain.label == "m"
+    monkeypatch.setenv("LLM_PROVIDER", "groq")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    thinking = LLMClient.from_env()
+    thinking.min_interval = 0
+    thinking.chat("s", "u")
+    assert sent[1]["reasoning_effort"] == "low"
+    assert thinking.label == "openai/gpt-oss-20b, reasoning_effort=low"   # reports say how it ran
+
+
+def test_invalid_json_from_the_model_fails_only_that_batch(monkeypatch):
+    class Resp:
+        ok, status_code = False, 400
+        text = '{"error": {"code": "json_validate_failed", "failed_generation": ""}}'
+
+    monkeypatch.setattr("payroll_sentinel.llm.requests.post", lambda *a, **k: Resp())
+    client = LLMClient(base_url="http://fake", model="m", min_interval=0)
+    with pytest.raises(LLMOutputError, match="did not return valid JSON"):
+        client.chat("s", "u", json_mode=True)
+
+    class HalfBrokenClient(FakeClient):
+        def chat(self, system, user, json_mode=False):
+            if "tech lead" in user:                   # titles reach the model cleaned
+                raise LLMOutputError("model 'm' did not return valid JSON")
+            return super().chat(system, user, json_mode)
+
+    out = llm_normalize(pd.Series(["PO Sr", "Tech Lead"]), HalfBrokenClient(), batch_size=1)
+    assert out["source"].tolist() == ["llm", "rules"]  # the bad batch falls back to rules
 
 
 def test_llm_client_tag_and_model_list(monkeypatch):

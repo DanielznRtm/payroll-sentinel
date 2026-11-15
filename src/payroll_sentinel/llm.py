@@ -8,6 +8,7 @@ Switching provider is an environment variable, not a code change.
     LLM_PROVIDER=groq    LLM_API_KEY=...   # console.groq.com key (free tier)
     LLM_PROVIDER=ollama                    # local model, no key
     LLM_MODEL=...                          # optional override
+    LLM_REASONING_EFFORT=low               # optional, for reasoning models such as gpt-oss
 """
 
 from __future__ import annotations
@@ -29,6 +30,10 @@ PROVIDERS = {
 
 class LLMRequestError(RuntimeError):
     """The API rejected the request (bad key, unknown model...): retrying will not help."""
+
+
+class LLMOutputError(RuntimeError):
+    """The model answered, but not with valid JSON: only this request failed, not the setup."""
 
 
 @dataclass
@@ -63,9 +68,17 @@ class LLMClient:
     timeout: float = 60.0
     max_retries: int = 4
     min_interval: float = 4.5  # seconds between calls: stays under ~15 req/min free tiers
+    # Reasoning models (gpt-oss) think before answering; with the default effort the
+    # thinking can fill the whole answer budget and leave no JSON. None: not sent.
+    reasoning_effort: str | None = None
 
     _last_call: float = 0.0
     stats: LLMStats = field(default_factory=LLMStats)
+
+    @property
+    def label(self) -> str:
+        """Model name as shown in reports, with the reasoning effort when one is set."""
+        return f"{self.model}, reasoning_effort={self.reasoning_effort}" if self.reasoning_effort else self.model
 
     @property
     def tag(self) -> str:
@@ -83,7 +96,8 @@ class LLMClient:
             raise RuntimeError(f"Set LLM_API_KEY for provider '{provider}'.")
         return cls(base_url=os.getenv("LLM_BASE_URL", base_url),
                    model=os.getenv("LLM_MODEL", model), api_key=key, provider=provider,
-                   min_interval=0.0 if provider == "ollama" else 4.5)
+                   min_interval=0.0 if provider == "ollama" else 4.5,
+                   reasoning_effort=os.getenv("LLM_REASONING_EFFORT") or None)
 
     def list_models(self) -> list[str]:
         """Model ids this key can use (OpenAI-compatible GET /models)."""
@@ -101,6 +115,8 @@ class LLMClient:
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if self.reasoning_effort:
+            payload["reasoning_effort"] = self.reasoning_effort
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
         start = time.monotonic()
@@ -121,6 +137,9 @@ class LLMClient:
                     self.stats.rate_limited += resp.status_code == 429
                     time.sleep(2 ** attempt * 5)
                     continue
+                if resp.status_code == 400 and "json_validate_failed" in resp.text:
+                    # Groq checks JSON mode itself: the model's output was bad, not our setup
+                    raise LLMOutputError(f"model '{self.model}' did not return valid JSON: {resp.text[:300]}")
                 if not resp.ok:  # keep the provider's explanation: it says why (model retired, bad key...)
                     raise LLMRequestError(
                         f"HTTP {resp.status_code} for model '{self.model}': {resp.text[:500]}")

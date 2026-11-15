@@ -142,7 +142,7 @@ def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
         submitted=submitted, truth=truth, result=result,
         score=score(result, truth), oracle_score=score(result_oracle, truth),
         titles=title_accuracy(norm, truth, submitted["job_title"]),
-        method=f"LLM ({client.model})" if use_llm else "keyword rules",
+        method=f"LLM ({client.label})" if use_llm else "keyword rules",
         llm_coverage=float(norm.loc[has_title, "source"].eq("llm").mean()) if use_llm else None,
         llm_run=_llm_run(client, seconds) if use_llm else None,
     )

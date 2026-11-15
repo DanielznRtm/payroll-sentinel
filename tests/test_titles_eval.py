@@ -21,7 +21,7 @@ HELDOUT = Path(__file__).resolve().parents[1] / "eval" / "heldout_titles.csv"
 
 class ScriptedClient:
     """Stands in for an LLM: answers each cleaned title from a fixed table."""
-    model = "llama3.1:8b"  # has a ':' like real Ollama names, which is not allowed in Windows file names
+    model = label = "llama3.1:8b"  # has a ':' like real Ollama names, not allowed in Windows file names
 
     def __init__(self, answers):
         self.answers = answers
