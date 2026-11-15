@@ -82,7 +82,11 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
 
 ## Roadmap
 
-1. **Module A, next:**
+1. **Module A, v1.0.0 released (see CHANGELOG.md). Next:**
+   - Brazilian official occupations (CBO 2002 titles and synonyms) to strengthen
+     the keyword rules, measured on the held-out titles; later, RAIS microdata to
+     calibrate the generator (a decision for the user: it changes every synthetic
+     number);
    - the README model table (accuracy × latency × cost) has two Gemini models and
      Groq; a local Ollama model needs an NVIDIA GPU;
    - natural-language questions over the benchmark are built (`ask.py`): the LLM
