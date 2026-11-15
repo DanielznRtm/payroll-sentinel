@@ -79,9 +79,12 @@ read, and C's comparisons are only as good as the data behind them.
   compares it with all other companies' salaries for the same job family and
   level. Three detectors vote, and a majority vote keeps the recall while cutting
   the false alarms of any single detector.
-* **Cause diagnosis** turns a peer ratio into an action. A ratio of about 12× means
-  an annual value was typed as monthly. A ratio below 0.5× or above 2× means the
-  title or level is probably wrong.
+* **Cause diagnosis** turns a peer ratio into an action, the same way up and down.
+  About 12× the peer median means an annual value was typed as monthly; about
+  1/12 means a monthly value was divided by 12. Between 6× and 9× (or 1/6 and
+  1/9) a real top salary is also plausible, so the row goes to review instead of
+  being blocked. Beyond 30× either way it cannot be a real salary. A ratio below
+  0.5× or above 2× means the title or level is probably wrong.
 * **Title normalization** maps messy titles (`Dev Backend Sr.`, `HRBP`,
   `ANALISTA DE BI II | Squad Pagamentos`) to a canonical taxonomy. Without it,
   a row has no peer group and is invisible to the statistical checks.

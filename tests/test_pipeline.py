@@ -10,7 +10,7 @@ from payroll_sentinel.llm import LLMClient, LLMOutputError, LLMRequestError, LLM
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
 from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
 from payroll_sentinel.taxonomy import legal_min_wage
-from payroll_sentinel.validate import rule_checks, validate
+from payroll_sentinel.validate import _diagnose, rule_checks, validate
 
 
 @pytest.fixture(scope="module")
@@ -66,6 +66,22 @@ def test_small_file_without_peer_groups_still_runs_rules():
     result = validate(df, rule_normalize(df["job_title"]))
     assert set(result.issues["cause"]) == {"decimal_shift"}
     assert result.records["flag_ensemble"].isna().all()
+
+
+@pytest.mark.parametrize("ratio,cause,severity", [
+    (12.0, "annual_as_monthly", "block"),
+    (25.0, "annual_as_monthly", "block"),     # 13.33 salaries of someone paid ~2x the median
+    (7.0, "annual_as_monthly", "warn"),       # could also be a real top salary
+    (1 / 12, "divided_by_12", "block"),       # the mirror image
+    (1 / 7, "divided_by_12", "warn"),
+    (180.0, "extreme_value", "block"),
+    (1 / 40, "extreme_value", "block"),
+    (3.0, "level_salary_mismatch", "warn"),
+    (0.4, "level_salary_mismatch", "warn"),
+    (1.3, "statistical_outlier", "warn"),
+])
+def test_cause_diagnosis_works_both_ways(ratio, cause, severity):
+    assert _diagnose(ratio) == (cause, severity)
 
 
 def test_duplicate_ids_flag_both_rows():

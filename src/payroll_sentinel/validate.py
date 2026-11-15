@@ -29,6 +29,18 @@ BONUS_RATIO_LIMIT = 1.5         # annual bonus > 1.5x annual base salary
 MIN_GROUP_SIZE = 15             # minimum peers to compare against
 Z_LIMIT = 3.5
 IQR_K = 1.5
+UNIT_REVIEW = 6.0               # this many times away from peers: probably a unit error (x12 or /12)
+UNIT_BLOCK = 9.0                # ... and from here on, close enough to 12 to block it
+# An annual figure can be 13.33 monthly salaries (13th salary + vacation third) of
+# someone paid ~2x the group median: up to ~27x is still a unit error. Beyond 30x
+# either way, no real salary.
+EXTREME = 30.0
+CAUSE_HINTS = {
+    "extreme_value": f" More than {EXTREME:.0f}x away from its peers: a typo or unit error, not a real salary.",
+    "annual_as_monthly": " Looks like an annual value typed in the monthly field.",
+    "divided_by_12": " Looks like a monthly value divided by 12 (sent where an annual one was expected).",
+    "level_salary_mismatch": " Check whether the title/level is right.",
+}
 
 
 @dataclass
@@ -84,10 +96,20 @@ def rule_checks(df: pd.DataFrame) -> list[dict]:
 
 
 def _diagnose(ratio: float) -> tuple[str, str]:
-    """Probable cause from salary / peer-median ratio."""
-    if 6.0 <= ratio <= 20.0:
-        return "annual_as_monthly", "block"
-    if ratio >= 2.0 or ratio <= 0.5:
+    """Probable cause from salary / peer-median ratio, the same way up and down.
+
+    About 12x the peers is an annual value typed as monthly; about 1/12 is its
+    mirror image, a monthly value divided by 12. Between 6x and 9x a real top
+    salary is also plausible (a large company can pay several times the market
+    median), so that band goes to human review instead of a block.
+    """
+    far = max(ratio, 1 / ratio)
+    if far >= EXTREME:
+        return "extreme_value", "block"
+    if far >= UNIT_REVIEW:
+        cause = "annual_as_monthly" if ratio > 1 else "divided_by_12"
+        return cause, "block" if far >= UNIT_BLOCK else "warn"
+    if far >= 2.0:
         return "level_salary_mismatch", "warn"
     return "statistical_outlier", "warn"
 
@@ -143,10 +165,9 @@ def statistical_checks(df: pd.DataFrame, families: pd.Series, levels: pd.Series,
         peers = int(sizes[i])
         msg = (f"Salary is {r['peer_ratio']:.2f}x the median of {peers} peers "
                f"({r['group']}, median R$ {np.exp(r['median']):,.0f}). Votes: {int(r['votes'])}/3.")
-        if cause == "annual_as_monthly":
-            msg += " Looks like an annual value typed in the monthly field."
-        elif cause == "level_salary_mismatch":
-            msg += " Check whether the title/level is right."
+        msg += CAUSE_HINTS.get(cause, "")
+        if severity == "warn" and cause in ("annual_as_monthly", "divided_by_12"):
+            msg += " It could also be a real salary at the edge of the market: review it."
         issues.append(_issue(r["row_id"], df.at[i, "company_id"], df.at[i, "employee_id"],
                              "peer_comparison", cause, severity, msg))
     return work, issues
