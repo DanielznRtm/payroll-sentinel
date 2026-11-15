@@ -3,7 +3,8 @@
 Two layers:
 
 1. Deterministic rules (one row at a time): required fields, duplicated IDs,
-   impossible dates, minimum wage proportional to weekly hours, bonus ratio.
+   rows copied under a new ID, impossible dates, minimum wage proportional to
+   weekly hours, bonus ratio.
 2. Statistical checks (the whole benchmark at once): each salary is compared
    with every other company's salaries for the same (family, level). Three
    detectors vote - robust z-score, IQR fence and Isolation Forest - and a
@@ -62,6 +63,10 @@ def rule_checks(df: pd.DataFrame) -> list[dict]:
     bonus = pd.to_numeric(df["annual_bonus"], errors="coerce").fillna(0)
     hire = pd.to_datetime(df["hire_date"], errors="coerce")
     dup = df.duplicated(["company_id", "employee_id"], keep=False)
+    # Same company, every other field equal, but a new ID: a row pasted twice? (all columns
+    # the company sent count, so extra ones such as city make a coincidence less likely)
+    content = [c for c in df.columns if c not in ("row_id", "employee_id")]
+    copy = df.duplicated(content, keep=False) & ~dup
     ref = pd.Timestamp(REFERENCE_DATE)
 
     for i, r in df.iterrows():
@@ -75,6 +80,10 @@ def rule_checks(df: pd.DataFrame) -> list[dict]:
         if dup[i]:
             issues.append(_issue(*base, "unique_id", "duplicate_id", "block",
                                  f"Employee ID {r['employee_id']} appears more than once."))
+        if copy[i]:
+            issues.append(_issue(*base, "unique_id", "duplicate_record", "warn",
+                                 "Every field except the employee ID matches another row of this "
+                                 "company: the same person sent twice, or two identical records?"))
         if pd.isna(hire[i]) or hire[i] > ref or hire[i].year < 1950:
             issues.append(_issue(*base, "dates", "future_hire_date", "block",
                                  f"Hire date {r['hire_date']} is impossible for a {REFERENCE_DATE} cut-off."))

@@ -60,7 +60,7 @@ def test_decimal_shift_and_bonus_and_dates():
 
 def test_small_file_without_peer_groups_still_runs_rules():
     # Fewer than MIN_GROUP_SIZE rows per (family, level): no peer comparison is possible.
-    rows = [_row(row_id=i, employee_id=f"C1-{i}") for i in range(5)]
+    rows = [_row(row_id=i, employee_id=f"C1-{i}", monthly_salary=5000.0 + i) for i in range(5)]
     rows.append(_row(row_id=5, employee_id="C1-5", monthly_salary=8.5))
     df = pd.DataFrame(rows)
     result = validate(df, rule_normalize(df["job_title"]))
@@ -87,6 +87,16 @@ def test_cause_diagnosis_works_both_ways(ratio, cause, severity):
 def test_duplicate_ids_flag_both_rows():
     issues = rule_checks(pd.DataFrame([_row(row_id=0), _row(row_id=1)]))
     assert sorted(i["row_id"] for i in issues if i["cause"] == "duplicate_id") == [0, 1]
+    assert "duplicate_record" not in {i["cause"] for i in issues}   # one finding, not two
+
+
+def test_rows_copied_under_a_new_id_go_to_review():
+    rows = [_row(row_id=0, employee_id="C1-1"), _row(row_id=1, employee_id="C1-2"),
+            _row(row_id=2, employee_id="C1-3", monthly_salary=5100.0),
+            _row(row_id=3, employee_id="C2-1", company_id="C2")]   # same record, other company
+    copies = [i for i in rule_checks(pd.DataFrame(rows)) if i["cause"] == "duplicate_record"]
+    assert [i["row_id"] for i in copies] == [0, 1]
+    assert {i["severity"] for i in copies} == {"warn"}
 
 
 @pytest.mark.parametrize("title,family,level", [
