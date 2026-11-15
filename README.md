@@ -179,7 +179,7 @@ higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 59 tests (4 skip without the [ui] extra)
+pytest                                                 # 60 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```

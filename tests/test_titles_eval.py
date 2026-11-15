@@ -16,7 +16,7 @@ from payroll_sentinel.llm import LLMClient, LLMStats
 from payroll_sentinel.taxonomy import FAMILIES
 from payroll_sentinel.titles_eval import HeldoutError, compare, load_heldout, summarize
 
-TEMPLATE = Path(__file__).resolve().parents[1] / "eval" / "heldout_titles.csv"
+HELDOUT = Path(__file__).resolve().parents[1] / "eval" / "heldout_titles.csv"
 
 
 class ScriptedClient:
@@ -128,6 +128,12 @@ def test_eval_titles_with_llm_uses_the_client_and_no_cache(tmp_path, monkeypatch
 
 
 def test_eval_titles_refuses_the_unfilled_template(monkeypatch, tmp_path):
+    path = write_csv(tmp_path / "h.csv", [["TODO 1", "data_scientist", "senior"], ["TODO 2", "", ""]])
     with pytest.raises(SystemExit, match="placeholder title 'TODO 1'"):
-        run_cli(monkeypatch, TEMPLATE, "--reports", tmp_path)
-    assert not list(tmp_path.iterdir())             # no report from placeholder rows
+        run_cli(monkeypatch, path, "--reports", tmp_path / "out")
+    assert not (tmp_path / "out").exists()          # no report from placeholder rows
+
+
+def test_committed_heldout_file_is_valid():
+    gold = load_heldout(HELDOUT)                    # raises on any format problem
+    assert gold["family"].notna().any() and gold["family"].isna().any()
