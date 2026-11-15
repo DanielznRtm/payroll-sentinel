@@ -120,6 +120,34 @@ The full reports, including per-error-type numbers and company decisions, are in
 [`reports/evaluation.md`](reports/evaluation.md) (keyword rules) and
 [`reports/evaluation_llm_gemini-3.5-flash-lite.md`](reports/evaluation_llm_gemini-3.5-flash-lite.md) (LLM).
 
+### Held-out titles from real job postings
+
+The synthetic titles come from a fixed list, so I also wrote 130 titles by hand,
+copied from real job postings (mostly Gupy, plus LinkedIn, Vagas.com and other
+boards), with the source of each in [`eval/heldout_sources.csv`](eval/heldout_sources.csv).
+None of them is in `taxonomy.py`, and 16 are outside the taxonomy, where the right
+answer is to abstain. The labels were committed before the first run, and the
+prompt was not changed afterwards.
+
+| Metric (114 titles inside the taxonomy, 16 outside) | Keyword rules | LLM titles |
+|---|---|---|
+| Right family | 61.4 % | **97.4 %** |
+| Right family, when it answers | 98.6 % | 99.1 % |
+| Right family and level | 50.9 % | **86.8 %** |
+| Abstained (sent to human review) | 37.7 % | 1.8 % |
+| Wrong family (silent error) | 0.9 % | 0.9 % |
+| Outside titles correctly left unmapped | 13 / 16 | 14 / 16 |
+
+Rules almost never pick a wrong family, but they leave more than a third of real
+titles unmapped; the LLM maps nearly all of them. Its family errors are a data
+scientist post focused on web development (mapped to software engineer), a product
+marketing manager mapped to product manager, and a forklift operator mapped to
+production operator. 12 of its 17 errors are levels: 5 are ranges such as
+`Pleno/Sênior`, where my labels take the first level cited and the model took the
+higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
+4 calls, no 429s, 15 s. Reports: [rules](reports/titles_heldout_rules.md),
+[LLM](reports/titles_heldout_llm_gemini-3.5-flash-lite.md).
+
 ## What I learned
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
@@ -261,10 +289,11 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 ## Limitations and next steps
 
 * The data is synthetic. Level markers follow regular patterns, so level accuracy
-  is 100 % here; real titles are messier.
+  is 100 % here; on the 114 real held-out titles, LLM level accuracy is 89.5 %.
 * The synthetic long-tail titles come from a fixed list of abbreviations and
   English titles (`SWE`, `HRBP`), which a large model has likely seen before.
-  The 96.5 % long-tail accuracy is measured on that list, not on real-world titles.
+  The 96.5 % long-tail accuracy is measured on that list. The real-title check
+  (97.4 % family accuracy) uses only 130 titles, labeled by one person.
 * The LLM result is one model on one seed. **Next step:** run Groq and a local
   model too, and add an accuracy × latency × cost table.
 * Questions over the benchmark work, but their accuracy is not measured yet:
