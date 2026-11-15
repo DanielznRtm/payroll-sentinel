@@ -101,6 +101,7 @@ With rules, results are stable across seeds 7, 42 and 123 (F1 between 0.920 and
 | F1 | 0.92 | **0.96** |
 | False alarms on clean rows | 0.21 % | 0.23 % |
 | Long-tail titles mapped to the right job family | 4 % | **96.5 %** |
+| Real held-out titles mapped to the right job family ([below](#held-out-titles-from-real-job-postings)) | 61.4 % | **97.4 %** |
 | Statistical errors visible to the peer comparison | 62 / 81 | **81 / 81** |
 | Cause correctly identified, when detected | 96–100 % per error type | 97–100 % per error type |
 
@@ -148,6 +149,48 @@ higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
 4 calls, no 429s, 15 s. Reports: [rules](reports/titles_heldout_rules.md),
 [LLM](reports/titles_heldout_llm_gemini-3.5-flash-lite.md).
 
+### Comparing models
+
+Each model ran once, on free tiers, through the same two tests: the full pipeline
+(seed 42, `run --llm --no-cache`, 36 batches of 40 titles) and the 130 held-out
+titles (`eval-titles --llm`, 4 batches).
+
+| Model (provider) | Long-tail family (synthetic, 1,109 rows) | Held-out family (114 real titles) | Wrong family on held-out (false mappings, of 16 outside) | Detection F1 | Titles answered by the LLM | 429 responses | Total time (pipeline titles) | Cost |
+|---|---|---|---|---|---|---|---|---|
+| **`gemini-3.5-flash-lite`** (Gemini) | **99.5 %** | 97.4 % | 0.9 % (2) | **0.963** | 100 % | 0 | **160 s** | R$ 0 |
+| `gemini-3.5-flash` (Gemini) | 83.5 % | **99.1 %** | 0.9 % (0) | 0.954 | 75.5 % | 43 | 1,069 s | R$ 0 |
+| `openai/gpt-oss-20b` (Groq, `reasoning_effort=low`) | 52.1 % | 87.7 % | 2.6 % (2) | 0.921 | 100 % | 39 | 497 s | R$ 0 |
+| Keyword rules (no LLM) | 4 % | 61.4 % | 0.9 % (3) | 0.92 | – | – | no API calls | R$ 0 |
+
+**Default: `gemini-3.5-flash-lite`.** It is the only model that answered every
+title at pipeline volume without a single 429, and it has the best long-tail
+accuracy, the best F1 and the shortest time. `gemini-3.5-flash` is better on real
+titles, but the free tier cannot sustain it for a 36-call run, and Groq's
+`gpt-oss-20b` abstains too often to beat the keyword rules on F1.
+
+* **`gemini-3.5-flash` is limited by the free tier, not by the model.** On the
+  held-out titles (4 calls, no 429s) it was the most accurate model and never
+  forced an outside title into a family. In the pipeline, 43 rate-limit responses
+  made 9 of the 36 batches fall back to rules, which is why its long-tail score
+  drops; it also waited 18.6 s per request on the held-out run.
+* **`gpt-oss-20b` answers fast but abstains.** It waited only 1.7 s per request;
+  the 497 s are back-off for Groq's 8,000 tokens-per-minute free limit. It left
+  47.9 % of long-tail titles and 3.5 % of common ones unmapped. Because an LLM
+  answer replaces the rule answer, it does worse than rules on common titles
+  (96.5 % vs 100 %), and only 71 of the 81 statistical errors stay visible.
+  False alarms nearly double: 18 clean rows flagged instead of 10 (0.42 % vs 0.23 %).
+* **Single runs vary.** The Results table above shows 96.5 % long-tail accuracy
+  for `gemini-3.5-flash-lite`: that is an earlier run of the same model and seed,
+  and its report feeds the demo. Treat differences of a few points between single
+  runs as noise.
+* A local Ollama model was not measured: it needs an NVIDIA GPU, and the
+  development machine has none.
+
+Reports: pipeline runs in [`reports/models/`](reports/models/); held-out runs in
+[flash-lite](reports/titles_heldout_llm_gemini-3.5-flash-lite.md),
+[flash](reports/titles_heldout_llm_gemini-3.5-flash.md) and
+[gpt-oss-20b](reports/titles_heldout_llm_openai-gpt-oss-20b.md).
+
 ## What I learned
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
@@ -172,6 +215,10 @@ higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
    peer median sit inside normal pay dispersion (log-salary SD around 0.3 within a
    group) and are often missed. Catching them would need richer context, such as
    the company's own pay bands, not a better outlier detector.
+6. **On a free tier, the limit picks the model.** The most accurate model on real
+   titles could not finish a full run without rate limits, and a weaker model
+   scored below plain rules on titles the rules already knew. A model is only as
+   good as the share of the job it can do inside the quota.
 
 ## Run it
 
@@ -179,7 +226,7 @@ higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 61 tests (4 skip without the [ui] extra)
+pytest                                                 # 63 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
 ```
@@ -240,8 +287,13 @@ export LLM_PROVIDER=gemini LLM_API_KEY=...   # Google AI Studio key, free tier
 # export LLM_PROVIDER=groq LLM_API_KEY=...   # GroqCloud, free tier
 # export LLM_PROVIDER=ollama                 # local model, no key
 # export LLM_MODEL=...                       # override the default (gemini-3.5-flash-lite)
+# export LLM_REASONING_EFFORT=low            # needed for reasoning models such as Groq's gpt-oss
 python -m payroll_sentinel.cli run --llm
 ```
+
+`openai/gpt-oss-20b`, Groq's default here, is a reasoning model: with its default
+effort it spent the whole 2,048-token answer budget thinking and returned no JSON.
+`LLM_REASONING_EFFORT=low` fixes that; it is sent only when set.
 
 Model names change often: `gemini-2.5-flash-lite`, the previous default, returned
 HTTP 404 for a new key. List what your key can use with `GET /models` and set
@@ -250,8 +302,8 @@ HTTP 404 for a new key. List what your key can use with `GET /models` and set
 Several choices keep it cheap and robust:
 
 * Only **unique** cleaned titles are sent: 4,484 titled rows become 1,425 titles.
-* Titles go out in batches of 40, so the default run makes 36 calls. It took
-  401 s on the free tier (about 11 s per call); cost R$ 0.
+* Titles go out in batches of 40, so the default run makes 36 calls. Time per
+  model is in [Comparing models](#comparing-models); cost R$ 0.
 * Calls are throttled to stay under free-tier rate limits (at most one every 4.5 s).
 * Results are cached to disk, one file per provider and model, so a re-run costs
   nothing and one model's answers never stand in for another's. Use
@@ -261,8 +313,9 @@ Several choices keep it cheap and robust:
   back to the rule result, and the report states the share of titles the LLM
   actually answered.
 * A rejected request (bad key, unknown model) stops the run at the first call,
-  with the provider's message. If every batch fails, the run fails instead of
-  reporting rule results as LLM results.
+  with the provider's message. A batch the model answers with invalid JSON falls
+  back to rules, like a rate-limited one. If every batch fails, the run fails
+  instead of reporting rule results as LLM results.
 
 Free tiers may use your prompts for training, which is fine for synthetic data but
 not for real payroll.
@@ -294,8 +347,8 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
   English titles (`SWE`, `HRBP`), which a large model has likely seen before.
   The 96.5 % long-tail accuracy is measured on that list. The real-title check
   (97.4 % family accuracy) uses only 130 titles, labeled by one person.
-* The LLM result is one model on one seed. **Next step:** run Groq and a local
-  model too, and add an accuracy × latency × cost table.
+* Each model in the comparison ran once, on one seed. A local Ollama model is
+  still unmeasured, because it needs an NVIDIA GPU.
 * Questions over the benchmark work, but their accuracy is not measured yet:
   `eval/questions.csv` is waiting for hand-written questions.
 

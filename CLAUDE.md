@@ -70,12 +70,16 @@ LLM titles (`gemini-3.5-flash-lite`, one run, seed 42): precision 0.959, recall
 The LLM title cache has one file per provider and model
 (`data/llm_title_cache_<provider>_<model>.json`), so models never share answers;
 `run --llm --no-cache` times a model, and every LLM report states calls, 429s and time.
+Model comparison (README "Comparing models", reports in `reports/models/`): flash-lite
+is the default; `gemini-3.5-flash` is better on real titles but hits free-tier 429s;
+Groq `openai/gpt-oss-20b` needs `LLM_REASONING_EFFORT=low` (optional env var, sent
+only when set) and abstains too often. Ollama is not measured (no NVIDIA GPU).
 
 ## Roadmap
 
 1. **Module A, next:**
-   - add a README table comparing models (accuracy × latency × cost): Gemini is
-     measured, Groq and a local Ollama model are next;
+   - the README model table (accuracy × latency × cost) has two Gemini models and
+     Groq; a local Ollama model needs an NVIDIA GPU;
    - natural-language questions over the benchmark are built (`ask.py`): the LLM
      only fills a fixed JSON query that the code validates and runs; measuring them
      needs the hand-written `eval/questions.csv`.
