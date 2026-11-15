@@ -3,7 +3,7 @@
     python -m payroll_sentinel.cli run            # generate + validate + evaluate (rules only, free)
     python -m payroll_sentinel.cli run --llm      # same, titles normalized by an LLM (see llm.py)
     python -m payroll_sentinel.cli validate FILE  # validate your own CSV
-    python -m payroll_sentinel.cli eval-titles FILE [--llm]  # score titles on a held-out file
+    python -m payroll_sentinel.cli eval-titles FILE [--llm | --cbo]  # score titles on a held-out file
     python -m payroll_sentinel.cli models         # model ids your LLM key can use
     python -m payroll_sentinel.cli ask "QUESTION"  # question about the benchmark (needs an LLM)
     python -m payroll_sentinel.cli eval-ask FILE   # score ask on eval/questions.csv (needs an LLM)
@@ -27,8 +27,11 @@ def cmd_run(args) -> None:
     data.mkdir(parents=True, exist_ok=True)
     reports.mkdir(parents=True, exist_ok=True)
 
+    if args.llm and args.cbo:
+        raise SystemExit("--cbo adds CBO titles to the keyword rules; it cannot be combined with --llm.")
     ev = run_evaluation(seed=args.seed, n_companies=args.companies, use_llm=args.llm,
-                        cache_path=None if args.no_cache else data / "llm_title_cache.json")
+                        cache_path=None if args.no_cache else data / "llm_title_cache.json",
+                        cbo=args.cbo)
     ev.submitted.to_csv(data / "submissions.csv", index=False)
     ev.truth.to_csv(data / "ground_truth.csv", index=False)
     ev.result.issues.to_csv(reports / "issues.csv", index=False)
@@ -62,7 +65,9 @@ def cmd_eval_titles(args) -> None:
         gold = load_heldout(args.file)
     except HeldoutError as exc:
         raise SystemExit(f"{args.file} is not ready:\n{exc}")
-    ev = evaluate_titles(gold, use_llm=args.llm)
+    if args.llm and args.cbo:
+        raise SystemExit("--cbo adds CBO titles to the keyword rules; it cannot be combined with --llm.")
+    ev = evaluate_titles(gold, use_llm=args.llm, cbo=args.cbo)
     out = Path(args.reports)
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"titles_heldout_{ev.slug}.md"
@@ -116,6 +121,8 @@ def main() -> None:
     run.add_argument("--reports", default="reports")
     run.add_argument("--no-cache", action="store_true",
                      help="ask the LLM for every title (use it to time a model)")
+    run.add_argument("--cbo", action="store_true",
+                     help="keyword rules plus the official CBO titles and synonyms")
     run.set_defaults(func=cmd_run)
     val = sub.add_parser("validate", help="validate a CSV file")
     val.add_argument("file")
@@ -125,6 +132,8 @@ def main() -> None:
     ttl = sub.add_parser("eval-titles", help="score title normalization on a held-out file")
     ttl.add_argument("file", help="CSV with columns title,family,level (empty family: outside the taxonomy)")
     ttl.add_argument("--llm", action="store_true", help="normalize titles with an LLM (no cache)")
+    ttl.add_argument("--cbo", action="store_true",
+                     help="keyword rules plus the official CBO titles and synonyms")
     ttl.add_argument("--reports", default="reports")
     ttl.set_defaults(func=cmd_eval_titles)
     sub.add_parser("models", help="list the models your LLM key can use").set_defaults(func=cmd_models)

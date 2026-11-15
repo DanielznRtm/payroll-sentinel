@@ -3,7 +3,9 @@
 Two normalizers share one interface:
 
 * `rule_normalize` - deterministic keyword/regex baseline. Free, instant,
-  explainable, but only knows the spellings it was written for.
+  explainable, but only knows the spellings it was written for. Optionally
+  (`cbo=True`) it also looks titles up in the official CBO 2002 titles and
+  synonyms of the occupations chosen for each family (cbo_titles.py).
 * `llm_normalize` - sends the *unique* titles in batches to any
   OpenAI-compatible chat endpoint (Gemini free tier, Groq, local Ollama),
   validates every answer against the taxonomy and caches results on disk.
@@ -19,6 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .cbo_titles import CBO_TITLES
 from .llm import LLMClient, LLMRequestError
 from .taxonomy import FAMILIES, LEVELS
 
@@ -72,10 +75,25 @@ def rule_family(clean: str) -> str | None:
     return None
 
 
-def rule_normalize(titles: pd.Series) -> pd.DataFrame:
+def cbo_family(clean: str) -> str | None:
+    """Family of the longest official CBO title or synonym found in the title, as whole words.
+
+    The longest match is the most specific one: 'analista de suporte tecnico' beats
+    'analista de suporte' if both were listed.
+    """
+    padded = f" {clean} "
+    best = max((p for p in CBO_TITLES if f" {p} " in padded), key=len, default=None)
+    return CBO_TITLES[best] if best else None
+
+
+def rule_normalize(titles: pd.Series, cbo: bool = False) -> pd.DataFrame:
+    """Keyword rules; with `cbo=True`, titles the keywords miss are looked up in the CBO."""
     clean = titles.map(clean_title)
+    family = clean.map(lambda c: rule_family(c) if c else None)
+    if cbo:
+        family = family.where(family.notna(), clean.map(lambda c: cbo_family(c) if c else None))
     out = pd.DataFrame({
-        "family": clean.map(lambda c: rule_family(c) if c else None),
+        "family": family,
         "level": clean.map(lambda c: rule_level(c) if c else None),
     }, index=titles.index)
     out["source"] = "rules"

@@ -111,6 +111,31 @@ def test_rule_normalizer(title, family, level):
     assert (out["family"], out["level"]) == (family, level)
 
 
+def test_cbo_fills_only_the_titles_the_keywords_miss():
+    titles = pd.Series(["Analista de Sistemas Pleno", "Torneiro CNC", "Eletricista de Manutenção Industrial",
+                        "Analista de Sucesso do Cliente Sr", "Analista de Dados Sr.", "Motorista"])
+    plain, with_cbo = rule_normalize(titles), rule_normalize(titles, cbo=True)
+    assert plain["family"].iloc[:4].isna().all()                  # keywords alone miss these
+    assert with_cbo["family"].fillna("-").tolist() == [
+        "software_engineer", "production_operator", "maintenance_technician", "customer_support",
+        "data_analyst", "-"]                                         # keywords still win; unknown stays empty
+    assert with_cbo["level"].tolist() == plain["level"].tolist()   # the CBO never sets the level
+
+
+def test_cbo_prefers_the_longest_official_title():
+    from payroll_sentinel.normalize import cbo_family
+    assert cbo_family("analista de suporte tecnico") == "customer_support"
+    assert cbo_family("vendedor interno") == "sales_rep"
+    assert cbo_family("eletricistas") is None                       # whole words only
+
+
+def test_cli_refuses_cbo_with_llm(monkeypatch, tmp_path):
+    from payroll_sentinel import cli
+    monkeypatch.setattr("sys.argv", ["payroll_sentinel", "run", "--llm", "--cbo"])
+    with pytest.raises(SystemExit, match="cannot be combined"):
+        cli.main()
+
+
 def test_clean_title_strips_accents_and_noise():
     assert clean_title("  Técnico de Manutenção  (Sênior) ") == "tecnico de manutencao senior"
     assert clean_title(None) == ""

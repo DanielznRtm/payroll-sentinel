@@ -170,6 +170,37 @@ higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
 4 calls, no 429s, 15 s. Reports: [rules](reports/titles_heldout_rules.md),
 [LLM](reports/titles_heldout_llm_gemini-3.5-flash-lite.md).
 
+### Official Brazilian occupation titles (CBO)
+
+Keyword rules only know the spellings they were written with. The official
+Brazilian classification of occupations (CBO 2002, Ministério do Trabalho e
+Emprego) lists 2,725 occupations and 7,870 synonyms. I picked the CBO codes that
+belong to each family: 64 codes, reviewed by hand. Data analyst and product
+manager have none: the CBO's "gerente de produtos" is a marketing manager.
+[`scripts/build_cbo_titles.py`](scripts/build_cbo_titles.py) turns their titles and
+synonyms into 276 phrases ([`cbo_titles.py`](src/payroll_sentinel/cbo_titles.py)).
+With `--cbo`, a title the keywords miss is looked up there, longest phrase first;
+the level still comes from the title.
+
+| Metric | Keyword rules | Rules + CBO |
+|---|---|---|
+| Held-out titles: right family (114 inside the taxonomy) | 61.4 % | 63.2 % |
+| Held-out titles: wrong family | 0.9 % | 0.9 % |
+| Held-out titles outside the taxonomy left unmapped | 13 / 16 | 13 / 16 |
+| Synthetic long-tail titles: right family (seed 42) | 4 % | 7.7 % |
+| Synthetic F1 (seed 42) | 0.92 | 0.92 |
+
+The CBO helps where companies write official Portuguese titles: it recovered
+`Supervisor de Manutenção Industrial` and `Estagiário de Customer Success
+Manager`, and it never mapped a title outside the taxonomy. It does not help with
+English and tech jargon (`SWE`, `Account Executive`, `Analista de BI`), which is
+where the long tail is. On seeds 7 and 123, F1 moved from 0.925 to 0.932 and
+stayed at 0.924. On the three public files the share of titled rows did not change,
+since their titles are in English or Italian. So the CBO stays an option for now,
+and the LLM remains the main lever. Reports:
+[held-out](reports/titles_heldout_rules_cbo.md),
+[synthetic](reports/evaluation_rules_cbo.md).
+
 ### Comparing models
 
 Each model ran once, on free tiers, through the same two tests: the full pipeline
@@ -363,9 +394,10 @@ at senior or lead inconsistently.
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 75 tests (4 skip without the [ui] extra)
+pytest                                                 # 78 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
-python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm] titles not in taxonomy.py
+python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --cbo] titles not in taxonomy.py
+python -m payroll_sentinel.cli run --cbo               # keyword rules plus the official CBO titles
 ```
 
 `validate` writes `issues.csv`, `companies.csv` and two files to send back to the
@@ -463,7 +495,8 @@ not for real payroll.
 src/payroll_sentinel/
   taxonomy.py   job families, levels, cities, minimum-wage rule
   generate.py   synthetic submissions + planted errors + ground truth
-  normalize.py  keyword baseline and LLM normalizer (batching, cache, validation)
+  normalize.py  keyword baseline (optionally + CBO) and LLM normalizer (batching, cache, validation)
+  cbo_titles.py official CBO 2002 titles and synonyms per family (generated, do not edit)
   llm.py        small OpenAI-compatible client (Gemini / Groq / Ollama), with run stats
   validate.py   rules, peer-comparison ensemble, cause diagnosis, company decision
   evaluate.py   precision/recall per error type and per detector, title accuracy
@@ -473,6 +506,7 @@ src/payroll_sentinel/
   cli.py        run, validate, eval-titles, ask, eval-ask and models commands
 eval/           hand-written ground truth: held-out titles and questions
 scripts/        public_data_check.py: titles and full validation on public salary files
+                build_cbo_titles.py: rebuilds cbo_titles.py from the CBO tables (codes per family)
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```

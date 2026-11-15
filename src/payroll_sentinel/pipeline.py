@@ -35,9 +35,10 @@ def llm_cache_path(cache_path: str | Path | None, client) -> Path | None:
 
 
 def normalize_titles(titles: pd.Series, use_llm: bool = False,
-                     cache_path: str | Path | None = None, client=None) -> pd.DataFrame:
+                     cache_path: str | Path | None = None, client=None,
+                     cbo: bool = False) -> pd.DataFrame:
     if not use_llm:
-        return rule_normalize(titles)
+        return rule_normalize(titles, cbo=cbo)
     if client is None:
         from .llm import LLMClient
         client = LLMClient.from_env()
@@ -121,15 +122,18 @@ class Evaluation:
 
 
 def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
-                   cache_path: str | Path | None = None) -> Evaluation:
-    """Generate synthetic data with planted errors, validate it and score it against the truth."""
+                   cache_path: str | Path | None = None, cbo: bool = False) -> Evaluation:
+    """Generate synthetic data with planted errors, validate it and score it against the truth.
+
+    `cbo` adds the official CBO titles to the keyword rules (ignored with `use_llm`).
+    """
     submitted, truth = generate(seed=seed, n_companies=n_companies)
     client = None
     if use_llm:
         from .llm import LLMClient
         client = LLMClient.from_env()
     start = time.perf_counter()
-    norm = normalize_titles(submitted["job_title"], use_llm, cache_path, client)
+    norm = normalize_titles(submitted["job_title"], use_llm, cache_path, client, cbo=cbo)
     seconds = time.perf_counter() - start
     oracle = truth[["true_family", "true_level"]].rename(
         columns={"true_family": "family", "true_level": "level"})
@@ -142,7 +146,7 @@ def run_evaluation(seed: int = 42, n_companies: int = 25, use_llm: bool = False,
         submitted=submitted, truth=truth, result=result,
         score=score(result, truth), oracle_score=score(result_oracle, truth),
         titles=title_accuracy(norm, truth, submitted["job_title"]),
-        method=f"LLM ({client.label})" if use_llm else "keyword rules",
+        method=f"LLM ({client.label})" if use_llm else ("keyword rules + CBO" if cbo else "keyword rules"),
         llm_coverage=float(norm.loc[has_title, "source"].eq("llm").mean()) if use_llm else None,
         llm_run=_llm_run(client, seconds) if use_llm else None,
     )

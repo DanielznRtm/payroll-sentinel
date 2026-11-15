@@ -187,14 +187,17 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-")
 
 
-def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False) -> TitleEval:
-    """Normalize the held-out titles with rules or the LLM and compare with the answers.
+def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False, cbo: bool = False) -> TitleEval:
+    """Normalize the held-out titles with rules (optionally + CBO) or the LLM and compare.
 
     The LLM run uses no cache on purpose: the cache is keyed by title only, so a
     cached answer could come from a different model than the one being measured.
     """
     if not use_llm:
-        return TitleEval(compare(gold, rule_normalize(gold["title"])), "keyword rules", "rules")
+        pred = rule_normalize(gold["title"], cbo=cbo)
+        if cbo:
+            return TitleEval(compare(gold, pred), "keyword rules + CBO", "rules_cbo")
+        return TitleEval(compare(gold, pred), "keyword rules", "rules")
     from .llm import LLMClient
     client = LLMClient.from_env()
     start = time.perf_counter()
