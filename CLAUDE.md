@@ -92,9 +92,14 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
      checks synthetic salaries: `scripts/state_of_data_check.py` reads only six
      non-personal columns; data analyst and data scientist medians are within 10 %
      nationwide (report `reports/realism_state_of_data.md`). Nothing was recalibrated.
-   - Next, RAIS microdata for the other families (filter the approved CBO codes and
-     the synthetic cities). Recalibrating the generator is a decision for the user:
-     it changes every synthetic number;
+   - RAIS 2025 São Paulo microdata (`data/rais/RAIS_VINC_PUB_SP.7z`, gitignored)
+     checked by `scripts/rais_check.py`, streamed through the system `tar` (Windows
+     11 tar opens .7z). Medians: 5 of 8 families within 10 %; sales (retail sellers
+     dominate the CBO codes) and support (IT support vs telemarketing) differ by
+     definition; real log-pay spread 0.54-0.84 vs synthetic ~0.40, so synthetic recall
+     is optimistic; one city index per city is too simple. Report
+     `reports/realism_rais.md`. Recalibrating the generator (spread, city x family,
+     sales/support definitions) is the user's decision: it changes every synthetic number;
    - the README model table (accuracy × latency × cost) has two Gemini models and
      Groq; a local Ollama model needs an NVIDIA GPU;
    - natural-language questions over the benchmark are built (`ask.py`): the LLM

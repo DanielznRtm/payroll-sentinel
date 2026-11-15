@@ -3,11 +3,38 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from rais_check import COLS, keep, stats  # noqa: E402
 from state_of_data_check import band_bounds, grouped_median  # noqa: E402
+
+
+def test_rais_filter_keeps_only_full_time_active_clt_jobs_in_mapped_occupations():
+    rows = [  # cbo, city, active, hours, contract, intermittent, pay
+        ("212405", "355030", "1", "44", "10", "0", "9500.00"),   # kept: developer in São Paulo
+        ("212405", "355030", "0", "44", "10", "0", "9500.00"),   # not active on 31 December
+        ("212405", "355030", "1", "20", "10", "0", "4000.00"),   # part-time
+        ("212405", "355030", "1", "44", "30", "0", "9500.00"),   # civil servant, not CLT
+        ("212405", "355030", "1", "44", "10", "1", "9500.00"),   # intermittent
+        ("212405", "330455", "1", "44", "10", "0", "9500.00"),   # Rio de Janeiro: not a city here
+        ("999999", "355030", "1", "44", "10", "0", "9500.00"),   # occupation outside the families
+        ("212405", "350950", "1", "40", "10", "0", ".00"),       # kept by the filters, but no pay
+    ]
+    chunk = pd.DataFrame(rows, columns=list(COLS.values()))
+    counts = {}
+    kept = keep(chunk, counts)
+    assert kept[["family", "cbo", "city", "pay"]].values.tolist() == [
+        ["software_engineer", "212405", "São Paulo", 9500.0]]
+    assert counts == {"rows read": 8, "matching jobs with no December pay": 1}
+
+
+def test_rais_stats_reports_median_quartiles_and_log_spread():
+    s = stats(pd.Series([1000.0, 2000.0, 4000.0]))
+    assert (s["rows"], s["median"]) == (3, 2000.0)
+    assert s["log-pay SD"] == pytest.approx(np.std(np.log([1000, 2000, 4000])))
 
 
 def test_band_bounds_reads_survey_salary_bands():

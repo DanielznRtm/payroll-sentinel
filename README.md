@@ -379,10 +379,50 @@ the generator sets its base salaries, is less close: synthetic medians run up to
 18 % high, for lead data scientists. A data survey is a poor sample of other
 roles. It has fewer than 15 product managers per level, and only 18 mid-level and
 24 senior software engineers: their medians match the synthetic data at senior level,
-while the synthetic mid level is 44 % higher. The other families stay unchecked
-until the RAIS step. The survey also had one malformed answer of its own: a
-salary band "from R$ 25,001 to R$ 3,000". Report:
+while the synthetic mid level is 44 % higher. The survey also had one malformed
+answer of its own: a salary band "from R$ 25,001 to R$ 3,000". Report:
 [`reports/realism_state_of_data.md`](reports/realism_state_of_data.md).
+
+**Real pay from RAIS.** RAIS is Brazil's official record of every formal job,
+published without names or IDs. [`scripts/rais_check.py`](scripts/rais_check.py)
+reads the 2025 São Paulo file (25.5 million rows) as a stream from the
+`.7z` archive in about 3 minutes. It uses seven columns (occupation, municipality,
+active on 31 December, hours, contract type, intermittent flag, December pay) and
+never age, sex, race, nationality, disability or schooling. It keeps full-time CLT
+jobs in the CBO codes approved for each family, in São Paulo, Campinas and
+Sorocaba: 509,542 jobs (36,904 more had no December pay). RAIS has no seniority
+level, so both sides pool every level, and RAIS pay includes overtime and
+commissions while the synthetic salary is base pay.
+
+| 3 cities | Real median | Synthetic median | Synthetic / real | Real log-pay SD | Synthetic log-pay SD |
+|---|---|---|---|---|---|
+| Software engineer | R$ 10,093 | R$ 10,100 | 1.00 | 0.66 | 0.42 |
+| Financial analyst | R$ 6,573 | R$ 6,440 | 0.98 | 0.57 | 0.42 |
+| HR analyst | R$ 5,224 | R$ 5,530 | 1.06 | 0.54 | 0.40 |
+| Production operator | R$ 2,594 | R$ 2,390 | 0.92 | 0.40 | 0.37 |
+| Data scientist | R$ 12,413 | R$ 11,160 | 0.90 | 0.59 | 0.42 |
+| Maintenance technician | R$ 4,639 | R$ 4,035 | 0.87 | 0.60 | 0.40 |
+| Customer support | R$ 3,857 | R$ 3,130 | 0.81 | 0.72 | 0.40 |
+| Sales rep | R$ 3,267 | R$ 5,960 | **1.82** | 0.84 | 0.42 |
+
+* **Medians are close for most families.** Five of the eight are within 10 % of
+  real pay, and maintenance is 13 % low.
+* **Sales and support differ by definition, not by salary.** In the CBO codes,
+  67 % of sales jobs are retail sellers, with a median of R$ 2,713, and 11 % are
+  sales managers, at R$ 17,000. The synthetic family models B2B account
+  executives. In support, IT support analysts (R$ 5,000) sit next to telemarketing
+  operators (R$ 2,077 to R$ 2,937).
+* **Real pay is more spread out.** Within a family, the real spread of log pay is
+  0.54 to 0.84, except for production operators (0.40). The synthetic spread is
+  about 0.40. Errors hide more easily in real data than in the synthetic set,
+  so the synthetic recall is optimistic.
+* **One index per city is too simple.** Production operators earn more in
+  Campinas (R$ 3,087) and Sorocaba (R$ 2,964) than in São Paulo (R$ 2,474), while
+  software engineers earn less (R$ 9,117 and R$ 7,495 against R$ 10,268). The
+  generator applies one multiplier to every family in a city (0.92 and 0.85).
+
+Nothing was recalibrated yet. Doing it would change every synthetic number in this
+README. Report: [`reports/realism_rais.md`](reports/realism_rais.md).
 
 ## What I learned
 
@@ -424,7 +464,7 @@ salary band "from R$ 25,001 to R$ 3,000". Report:
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 80 tests (4 skip without the [ui] extra)
+pytest                                                 # 82 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --cbo] titles not in taxonomy.py
 python -m payroll_sentinel.cli run --cbo               # keyword rules plus the official CBO titles
@@ -538,6 +578,7 @@ eval/           hand-written ground truth: held-out titles and questions
 scripts/        public_data_check.py: titles and full validation on public salary files
                 build_cbo_titles.py: rebuilds cbo_titles.py from the CBO tables (codes per family)
                 state_of_data_check.py: synthetic salaries vs. the State of Data Brazil survey
+                rais_check.py: synthetic salaries vs. RAIS official job records (streamed from .7z)
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
@@ -546,8 +587,9 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 
 * The data is synthetic. Level markers follow regular patterns, so level accuracy
   is 100 % here; on the 114 real held-out titles, LLM level accuracy is 89.5 %.
-  Salaries for the two data families match a real survey within 10 % nationwide;
-  the other eight families are not checked against real pay yet.
+  Synthetic medians are close to real pay (a survey for the data families, RAIS
+  for eight families), but real pay is more spread out, so the synthetic recall is
+  optimistic. The sales and support families pool jobs with very different pay.
 * The synthetic long-tail titles come from a fixed list of abbreviations and
   English titles (`SWE`, `HRBP`), which a large model has likely seen before.
   The 96.5 % long-tail accuracy is measured on that list. The real-title check
