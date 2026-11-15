@@ -88,8 +88,13 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
      user approved; the CBO zip sits in gitignored `data/cbo/`). Measured: held-out
      family 61.4 % -> 63.2 %, no new wrong family or false mapping; synthetic F1
      unchanged. Making it the default is the user's call (it shifts README rule numbers).
-   - Later, RAIS microdata to calibrate the generator (a decision for the user: it
-     changes every synthetic number);
+   - State of Data Brazil 2025-2026 (Kaggle CSV in gitignored `data/state_of_data/`)
+     checks synthetic salaries: `scripts/state_of_data_check.py` reads only six
+     non-personal columns; data analyst and data scientist medians are within 10 %
+     nationwide (report `reports/realism_state_of_data.md`). Nothing was recalibrated.
+   - Next, RAIS microdata for the other families (filter the approved CBO codes and
+     the synthetic cities). Recalibrating the generator is a decision for the user:
+     it changes every synthetic number;
    - the README model table (accuracy × latency × cost) has two Gemini models and
      Groq; a local Ollama model needs an NVIDIA GPU;
    - natural-language questions over the benchmark are built (`ask.py`): the LLM

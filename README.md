@@ -354,6 +354,36 @@ with one to three rows per company: 121 of 11,261 Indian companies were rejected
 The taxonomy also has no level above lead, so the LLM puts managers and directors
 at senior or lead inconsistently.
 
+### How realistic are the synthetic salaries?
+
+The generator's salaries are made up, so I checked them against State of Data
+Brazil 2025-2026, a survey of Brazilian data professionals by Data Hackers and Bain
+(Kaggle; not in the repository). [`scripts/state_of_data_check.py`](scripts/state_of_data_check.py)
+reads only six columns: work status, manager flag, job, level, salary band and
+state. It never reads age, gender or race. It keeps CLT employees who are not
+managers, the closest match to a payroll file (1,037 answers). Salaries come in
+bands, so the survey medians are grouped-data medians, interpolated inside the
+band that holds the middle answer.
+
+| Brazil, monthly median | Junior | Mid | Senior | Lead (specialist/staff) |
+|---|---|---|---|---|
+| Data analyst, survey | R$ 4,200 | R$ 6,457 | R$ 9,563 | R$ 13,100 |
+| Data analyst, synthetic | R$ 4,210 | R$ 6,550 | R$ 9,410 | R$ 12,915 |
+| Data scientist, survey | R$ 6,875 | R$ 9,241 | R$ 14,714 | R$ 17,059 |
+| Data scientist, synthetic | R$ 6,280 | R$ 9,520 | R$ 13,770 | R$ 18,565 |
+
+For the two data families, synthetic medians are within 10 % of the survey
+nationwide, and the level steps match: a senior data analyst earns 1.48× the
+mid-level median in the survey and 1.44× in the synthetic data. São Paulo, where
+the generator sets its base salaries, is less close: synthetic medians run up to
+18 % high, for lead data scientists. A data survey is a poor sample of other
+roles. It has fewer than 15 product managers per level, and only 18 mid-level and
+24 senior software engineers: their medians match the synthetic data at senior level,
+while the synthetic mid level is 44 % higher. The other families stay unchecked
+until the RAIS step. The survey also had one malformed answer of its own: a
+salary band "from R$ 25,001 to R$ 3,000". Report:
+[`reports/realism_state_of_data.md`](reports/realism_state_of_data.md).
+
 ## What I learned
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
@@ -394,7 +424,7 @@ at senior or lead inconsistently.
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 78 tests (4 skip without the [ui] extra)
+pytest                                                 # 80 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --cbo] titles not in taxonomy.py
 python -m payroll_sentinel.cli run --cbo               # keyword rules plus the official CBO titles
@@ -507,6 +537,7 @@ src/payroll_sentinel/
 eval/           hand-written ground truth: held-out titles and questions
 scripts/        public_data_check.py: titles and full validation on public salary files
                 build_cbo_titles.py: rebuilds cbo_titles.py from the CBO tables (codes per family)
+                state_of_data_check.py: synthetic salaries vs. the State of Data Brazil survey
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
@@ -515,6 +546,8 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 
 * The data is synthetic. Level markers follow regular patterns, so level accuracy
   is 100 % here; on the 114 real held-out titles, LLM level accuracy is 89.5 %.
+  Salaries for the two data families match a real survey within 10 % nationwide;
+  the other eight families are not checked against real pay yet.
 * The synthetic long-tail titles come from a fixed list of abbreviations and
   English titles (`SWE`, `HRBP`), which a large model has likely seen before.
   The 96.5 % long-tail accuracy is measured on that list. The real-title check
