@@ -21,8 +21,11 @@ Payroll Sentinel checks each submission before it is accepted. It flags each row
 the probable cause in plain language, and decides per company whether to accept
 the file or ask for a resubmission.
 
-Everything runs on **synthetic data with planted, labeled errors**, so every claim
-below is measured, not assumed.
+Every claim below is measured, not assumed: on **synthetic data with planted,
+labeled errors**, on real job titles and questions written by hand, and on three
+public salary datasets.
+
+<!-- demo GIF goes here (docs/demo.gif) once it is recorded -->
 
 ## In one example
 
@@ -46,13 +49,25 @@ Payroll Sentinel answers:
 
 Decision for the company: accept the file without the blocked rows, or ask for a corrected one.
 
+## Results at a glance
+
+| What | Result |
+|---|---|
+| Errors caught (recall), with LLM titles | 97 % (precision 96 %) |
+| Real job titles mapped to the right family | 97.4 % (keyword rules: 61.4 %) |
+| Questions answered right / out-of-scope questions refused | 27 of 30 / 5 of 5 |
+| Public data: Indian salary rows reaching the peer comparison | 99.2 % (keyword rules: 2.7 %) |
+| Cost | R$ 0 (free LLM tier) |
+
+Details, methods and limits are in [Results](#results).
+
 ## Roadmap: clean data first, AI on top
 
 Payroll Sentinel is the first of three modules that build on each other:
 
 | Module | What it does | Status |
 |---|---|---|
-| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v0.2, this repo |
+| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v1.0, this repo |
 | **B. Labor-claim triage** | Reads a labor-claim petition, extracts each claim with an LLM and checks it against the validated payroll. Taxes and labor-law amounts come from a deterministic calculation engine, never from the LLM | Planned |
 | **C. Pay-fairness tool** | A public tool that tells a person whether their pay is fair: market percentile, net income after work-related costs, and CLT vs. contractor (PJ) | Specified |
 
@@ -118,11 +133,14 @@ Peer-comparison detectors on the statistical error types (keyword rules run):
 | Robust z-score | 0.85 | 0.84 | 0.85 |
 | IQR fence | 0.70 | 0.95 | 0.81 |
 | Isolation Forest | 0.51 | 0.55 | 0.53 |
-| **Majority vote** | **0.86** | **0.86** | **0.86** |
+| **Majority vote** | **0.85** | **0.85** | **0.85** |
 
 The full reports, including per-error-type numbers and company decisions, are in
 [`reports/evaluation.md`](reports/evaluation.md) (keyword rules) and
 [`reports/evaluation_llm_gemini-3.5-flash-lite.md`](reports/evaluation_llm_gemini-3.5-flash-lite.md) (LLM).
+The LLM report and the pipeline runs in `reports/models/` predate the two-way cause
+diagnosis: that change leaves flags, precision and recall as they are, so only
+their cause and company tables would read differently today.
 
 ### Held-out titles from real job postings
 
@@ -316,9 +334,9 @@ at senior or lead inconsistently.
 2. **The LLM fails safe here.** It got 39 of 4,484 titled rows wrong, and every
    one was an abstention ("no family"), never a wrong family: an unmapped row is
    only left out of the peer comparison, while a wrong family would compare it
-   against the wrong peers. Most misses were `Analista de CX` (customer
-   experience). I did not add that hint to the prompt: tuning the prompt on the
-   errors of the evaluation set would inflate the very number I am reporting.
+   against the wrong peers. I did not tune the prompt on these misses: tuning the
+   prompt on the errors of the evaluation set would inflate the very number I am
+   reporting.
 3. **Rules should go first.** Seven of the nine error types reach 100 % recall
    with plain rules, at zero cost and with an explanation anyone can read.
 4. **The ensemble mostly fixes IQR's false alarms.** Isolation Forest adds little
