@@ -14,7 +14,7 @@ import pandas as pd
 
 from .evaluate import score, title_accuracy
 from .generate import generate
-from .normalize import llm_normalize, rule_normalize
+from .normalize import clean_title, llm_normalize, rule_normalize
 from .validate import ValidationResult, validate
 
 # Columns the validator reads. Any extra columns in a file are kept and ignored.
@@ -56,6 +56,51 @@ def validate_submissions(df: pd.DataFrame, use_llm: bool = False,
         df = df.copy()
         df.insert(0, "row_id", range(len(df)))
     return validate(df, normalize_titles(df["job_title"], use_llm, cache_path))
+
+
+REFERENCE_PREFIX = "__reference__"
+
+
+def reference_peers(seed: int = 42, n_companies: int = 25) -> pd.DataFrame:
+    """Synthetic market rows without planted errors, to compare one company's salaries against.
+
+    The salaries follow the generator fitted to RAIS 2025 (taxonomy.py).
+    """
+    submitted, truth = generate(seed=seed, n_companies=n_companies)
+    ref = submitted.loc[truth["error_type"].eq("none"), REQUIRED_COLUMNS].copy()
+    ref["company_id"] = REFERENCE_PREFIX + ref["company_id"]
+    return ref.reset_index(drop=True)
+
+
+def validate_against_reference(df: pd.DataFrame, reference: pd.DataFrame,
+                               title_families: dict[str, str] | None = None) -> ValidationResult:
+    """Validate a company file with the reference rows as extra peers; report only the file's rows.
+
+    One company rarely has MIN_GROUP_SIZE peers of the same family and level, so on its
+    own a file gets almost no peer comparison. The reference rows supply the peers.
+    Titles always go through the offline rules, never an LLM; `title_families` lets the
+    company name the family of titles the rules do not know (the level still comes from
+    the title).
+    """
+    if "row_id" not in df.columns:
+        df = df.copy()
+        df.insert(0, "row_id", range(len(df)))
+    ref = reference.copy()
+    ref.insert(0, "row_id", [-1 - i for i in range(len(ref))])  # never clashes with the file's ids
+    combined = pd.concat([df, ref], ignore_index=True)
+    norm = normalize_titles(combined["job_title"])
+    if title_families:
+        chosen = {clean_title(t): fam for t, fam in title_families.items() if fam}
+        fam = combined["job_title"].map(clean_title).map(chosen)
+        norm.loc[fam.notna(), "family"] = fam[fam.notna()]
+    result = validate(combined, norm)
+    own = set(df["row_id"])
+    return ValidationResult(
+        issues=result.issues[result.issues["row_id"].isin(own)].reset_index(drop=True),
+        records=result.records[result.records["row_id"].isin(own)].reset_index(drop=True),
+        companies=result.companies[~result.companies["company_id"].astype(str)
+                                   .str.startswith(REFERENCE_PREFIX)].reset_index(drop=True),
+    )
 
 
 def annotate_submission(df: pd.DataFrame, result: ValidationResult) -> pd.DataFrame:
