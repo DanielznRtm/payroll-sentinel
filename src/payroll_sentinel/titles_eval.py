@@ -157,7 +157,7 @@ class TitleEval:
     def report(self, source: str) -> str:
         s, md = summarize(self.rows), _markdown
         coverage = [] if self.llm_coverage is None else [
-            f"Titles answered by the LLM: {self.llm_coverage:.1%} (the rest fell back to keyword rules).", ""]
+            f"Titles answered by the LLM: {self.llm_coverage:.1%} (the rest fell back to the rules).", ""]
         if self.llm_run:
             coverage += [f"LLM run: {self.llm_run}.", ""]
         errors = s["errors"][["title", "expected_family", "expected_level", "predicted_family",
@@ -187,8 +187,8 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-")
 
 
-def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False, cbo: bool = False) -> TitleEval:
-    """Normalize the held-out titles with rules (optionally + CBO) or the LLM and compare.
+def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False, cbo: bool = True) -> TitleEval:
+    """Normalize the held-out titles with rules (+ CBO unless `cbo=False`) or the LLM and compare.
 
     The LLM run uses no cache on purpose: the cache is keyed by title only, so a
     cached answer could come from a different model than the one being measured.
@@ -197,7 +197,7 @@ def evaluate_titles(gold: pd.DataFrame, use_llm: bool = False, cbo: bool = False
         pred = rule_normalize(gold["title"], cbo=cbo)
         if cbo:
             return TitleEval(compare(gold, pred), "keyword rules + CBO", "rules_cbo")
-        return TitleEval(compare(gold, pred), "keyword rules", "rules")
+        return TitleEval(compare(gold, pred), "keyword rules only", "rules")
     from .llm import LLMClient
     client = LLMClient.from_env()
     start = time.perf_counter()

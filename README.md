@@ -45,7 +45,7 @@ Payroll Sentinel answers:
 | Ana | ok | In line with other mid-level data analysts |
 | Bruno | block | About 12× the peer median: an annual salary typed in the monthly field (7,200 × 12) |
 | Carla | block | Below the 2026 minimum wage of R$ 1,621 for 44 h/week |
-| Diego | ok | The LLM maps `HRBP Sr` to *HR analyst, senior*, so he is compared with the right peers. Keyword rules alone would leave him out |
+| Diego | ok | The LLM maps `HRBP Sr` to *HR analyst, senior*, so he is compared with the right peers. The offline rules alone would leave him out |
 
 Decision for the company: accept the file without the blocked rows, or ask for a corrected one.
 
@@ -54,9 +54,9 @@ Decision for the company: accept the file without the blocked rows, or ask for a
 | What | Result |
 |---|---|
 | Errors caught (recall), with LLM titles | 97 % (precision 96 %) |
-| Real job titles mapped to the right family | 97.4 % (keyword rules: 61.4 %) |
+| Real job titles mapped to the right family | 97.4 % (offline rules: 63.2 %) |
 | Questions answered right / out-of-scope questions refused | 27 of 30 / 5 of 5 |
-| Public data: Indian salary rows reaching the peer comparison | 99.2 % (keyword rules: 2.7 %) |
+| Public data: Indian salary rows reaching the peer comparison | 99.2 % (offline rules: 2.7 %) |
 | Cost | R$ 0 (free LLM tier) |
 
 Details, methods and limits are in [Results](#results).
@@ -78,8 +78,8 @@ read, and C's comparisons are only as good as the data behind them.
 
 ```
  company CSV ──► title normalization ──► deterministic rules ──► peer comparison ──► report
-                 (keyword rules or an     (required fields,        (same family+level,
-                  LLM, cached)             duplicates, dates,       all companies)
+                 (keyword + CBO rules     (required fields,        (same family+level,
+                  or an LLM, cached)       duplicates, dates,       all companies)
                                            proportional minimum     robust z | IQR | Isolation Forest
                                            wage, bonus ratio)       └── majority vote (2 of 3)
                                                                     └── cause from peer ratio
@@ -108,35 +108,37 @@ read, and C's comparisons are only as good as the data behind them.
 
 Default run: 4,502 records, 25 companies, 242 planted errors (seed 42). The same
 validator was run twice, changing only how job titles are normalized: free,
-offline keyword rules, and an LLM (`gemini-3.5-flash-lite`, Gemini free tier).
-With rules, results are stable across seeds 7, 42 and 123 (F1 between 0.920 and
-0.925); the LLM run is a single run on seed 42.
+offline rules (keywords plus the official CBO titles, [below](#official-brazilian-occupation-titles-cbo)),
+and an LLM (`gemini-3.5-flash-lite`, Gemini free tier). With rules, results are
+stable across seeds 7, 42 and 123 (F1 between 0.920 and 0.932); the LLM run is a
+single run on seed 42.
 
-| Metric | Keyword rules | LLM titles |
+| Metric | Rules (keywords + CBO) | LLM titles |
 |---|---|---|
 | Precision (flagged rows that really had an error) | 0.96 | 0.96 |
 | Recall (errored rows that got flagged) | 0.88 | **0.97** |
 | F1 | 0.92 | **0.96** |
 | False alarms on clean rows | 0.21 % | 0.23 % |
-| Long-tail titles mapped to the right job family | 4 % | **96.5 %** |
-| Real held-out titles mapped to the right job family ([below](#held-out-titles-from-real-job-postings)) | 61.4 % | **97.4 %** |
-| Statistical errors visible to the peer comparison | 62 / 81 | **81 / 81** |
+| Long-tail titles mapped to the right job family | 7.7 % | **96.5 %** |
+| Real held-out titles mapped to the right job family ([below](#held-out-titles-from-real-job-postings)) | 63.2 % | **97.4 %** |
+| Statistical errors visible to the peer comparison | 63 / 81 | **81 / 81** |
 | Cause correctly identified, when detected | 96–100 % per error type | 97–100 % per error type |
 
 With LLM titles, recall equals the recall with perfect (oracle) titles: 0.967.
 What it still misses is the detection floor described below, not titles.
 
-Peer-comparison detectors on the statistical error types (keyword rules run):
+Peer-comparison detectors on the statistical error types (rules run):
 
 | Detector | Precision | Recall | F1 |
 |---|---|---|---|
 | Robust z-score | 0.85 | 0.84 | 0.85 |
-| IQR fence | 0.70 | 0.95 | 0.81 |
-| Isolation Forest | 0.51 | 0.55 | 0.53 |
-| **Majority vote** | **0.85** | **0.85** | **0.85** |
+| IQR fence | 0.71 | 0.95 | 0.81 |
+| Isolation Forest | 0.48 | 0.52 | 0.50 |
+| **Majority vote** | **0.85** | **0.84** | **0.85** |
 
 The full reports, including per-error-type numbers and company decisions, are in
-[`reports/evaluation.md`](reports/evaluation.md) (keyword rules) and
+[`reports/evaluation.md`](reports/evaluation.md) (rules; keywords alone in
+[`evaluation_keywords_only.md`](reports/evaluation_keywords_only.md)) and
 [`reports/evaluation_llm_gemini-3.5-flash-lite.md`](reports/evaluation_llm_gemini-3.5-flash-lite.md) (LLM).
 The LLM report and the pipeline runs in `reports/models/` predate the two-way cause
 diagnosis: that change leaves flags, precision and recall as they are, so only
@@ -151,12 +153,12 @@ None of them is in `taxonomy.py`, and 16 are outside the taxonomy, where the rig
 answer is to abstain. The labels were committed before the first run, and the
 prompt was not changed afterwards.
 
-| Metric (114 titles inside the taxonomy, 16 outside) | Keyword rules | LLM titles |
+| Metric (114 titles inside the taxonomy, 16 outside) | Rules (keywords + CBO) | LLM titles |
 |---|---|---|
-| Right family | 61.4 % | **97.4 %** |
+| Right family | 63.2 % | **97.4 %** |
 | Right family, when it answers | 98.6 % | 99.1 % |
-| Right family and level | 50.9 % | **86.8 %** |
-| Abstained (sent to human review) | 37.7 % | 1.8 % |
+| Right family and level | 51.8 % | **86.8 %** |
+| Abstained (sent to human review) | 36.0 % | 1.8 % |
 | Wrong family (silent error) | 0.9 % | 0.9 % |
 | Outside titles correctly left unmapped | 13 / 16 | 14 / 16 |
 
@@ -167,7 +169,7 @@ marketing manager mapped to product manager, and a forklift operator mapped to
 production operator. 12 of its 17 errors are levels: 5 are ranges such as
 `Pleno/Sênior`, where my labels take the first level cited and the model took the
 higher one, and 4 involve Roman numerals. One run of `gemini-3.5-flash-lite`:
-4 calls, no 429s, 15 s. Reports: [rules](reports/titles_heldout_rules.md),
+4 calls, no 429s, 15 s. Reports: [rules](reports/titles_heldout_rules_cbo.md),
 [LLM](reports/titles_heldout_llm_gemini-3.5-flash-lite.md).
 
 ### Official Brazilian occupation titles (CBO)
@@ -179,10 +181,11 @@ belong to each family: 64 codes, reviewed by hand. Data analyst and product
 manager have none: the CBO's "gerente de produtos" is a marketing manager.
 [`scripts/build_cbo_titles.py`](scripts/build_cbo_titles.py) turns their titles and
 synonyms into 276 phrases ([`cbo_titles.py`](src/payroll_sentinel/cbo_titles.py)).
-With `--cbo`, a title the keywords miss is looked up there, longest phrase first;
-the level still comes from the title.
+A title the keywords miss is looked up there, longest phrase first; the level
+still comes from the title. This is part of the default rules since v1.1
+(`--no-cbo` gives the keyword rules alone, as in v1.0).
 
-| Metric | Keyword rules | Rules + CBO |
+| Metric | Keywords only (v1.0) | Keywords + CBO (default) |
 |---|---|---|
 | Held-out titles: right family (114 inside the taxonomy) | 61.4 % | 63.2 % |
 | Held-out titles: wrong family | 0.9 % | 0.9 % |
@@ -196,10 +199,13 @@ Manager`, and it never mapped a title outside the taxonomy. It does not help wit
 English and tech jargon (`SWE`, `Account Executive`, `Analista de BI`), which is
 where the long tail is. On seeds 7 and 123, F1 moved from 0.925 to 0.932 and
 stayed at 0.924. On the three public files the share of titled rows did not change,
-since their titles are in English or Italian. So the CBO stays an option for now,
-and the LLM remains the main lever. Reports:
-[held-out](reports/titles_heldout_rules_cbo.md),
-[synthetic](reports/evaluation_rules_cbo.md).
+since their titles are in English or Italian. The gain is small, but it never
+added a wrong family, so the CBO became part of the default rules in v1.1; the LLM
+remains the main lever. Reports: held-out
+[keywords + CBO](reports/titles_heldout_rules_cbo.md) and
+[keywords only](reports/titles_heldout_rules.md); synthetic
+[keywords + CBO](reports/evaluation.md) and
+[keywords only](reports/evaluation_keywords_only.md).
 
 ### Comparing models
 
@@ -212,18 +218,18 @@ titles (`eval-titles --llm`, 4 batches).
 | **`gemini-3.5-flash-lite`** (Gemini) | **99.5 %** | 97.4 % | 0.9 % (2) | **0.963** | 100 % | 0 | **160 s** | R$ 0 |
 | `gemini-3.5-flash` (Gemini) | 83.5 % | **99.1 %** | 0.9 % (0) | 0.954 | 75.5 % | 43 | 1,069 s | R$ 0 |
 | `openai/gpt-oss-20b` (Groq, `reasoning_effort=low`) | 52.1 % | 87.7 % | 2.6 % (2) | 0.921 | 100 % | 39 | 497 s | R$ 0 |
-| Keyword rules (no LLM) | 4 % | 61.4 % | 0.9 % (3) | 0.92 | – | – | no API calls | R$ 0 |
+| Rules: keywords + CBO (no LLM) | 7.7 % | 63.2 % | 0.9 % (3) | 0.92 | – | – | no API calls | R$ 0 |
 
 **Default: `gemini-3.5-flash-lite`.** It is the only model that answered every
 title at pipeline volume without a single 429, and it has the best long-tail
 accuracy, the best F1 and the shortest time. `gemini-3.5-flash` is better on real
 titles, but the free tier cannot sustain it for a 36-call run, and Groq's
-`gpt-oss-20b` abstains too often to beat the keyword rules on F1.
+`gpt-oss-20b` abstains too often to beat the offline rules on F1.
 
 * **`gemini-3.5-flash` is limited by the free tier, not by the model.** On the
   held-out titles (4 calls, no 429s) it was the most accurate model and never
   forced an outside title into a family. In the pipeline, 43 rate-limit responses
-  made 9 of the 36 batches fall back to rules, which is why its long-tail score
+  made 9 of the 36 batches fall back to the v1.0 keyword rules, which is why its long-tail score
   drops; it also waited 18.6 s per request on the held-out run.
 * **`gpt-oss-20b` answers fast but abstains.** It waited only 1.7 s per request;
   the 497 s are back-off for Groq's 8,000 tokens-per-minute free limit. It left
@@ -288,6 +294,9 @@ Only job titles were sent to the LLM. No file has labeled salary errors, so this
 a case study, not a benchmark. One run of `gemini-3.5-flash-lite` on 1,387 distinct
 titles: 32 calls, no rate-limit (429) response, 147 s. Report:
 [`reports/public_data_gemini_gemini-3.5-flash-lite.md`](reports/public_data_gemini_gemini-3.5-flash-lite.md).
+It used the v1.0 keyword rules. With the CBO in the default rules, one US-style
+row of 6,702 changes (`Customer Success Manager` now maps to support), and every
+rule share below stays the same at one decimal.
 
 **Titles.** The Indian file tags every row with a software job role, a weak label:
 
@@ -428,8 +437,9 @@ README. Report: [`reports/realism_rais.md`](reports/realism_rais.md).
 
 1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
    of common titles but only 4 % of long-tail ones (`SWE`, `HRBP`,
-   `Account Executive`). That leaves 24 % of rows with no peer group, hiding 19 of
-   the 81 statistical errors. With perfect titles, the same validator's recall
+   `Account Executive`), and the official CBO titles raise that only to 7.7 %.
+   That leaves 23 % of rows with no peer group, hiding 18 of the 81 statistical
+   errors. With perfect titles, the same validator's recall
    rises from **0.88 to 0.97**. An LLM normalizer closed that gap entirely
    (recall 0.967, the oracle value) at zero cost.
 2. **The LLM fails safe here.** It got 39 of 4,484 titled rows wrong, and every
@@ -466,8 +476,8 @@ pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
 pytest                                                 # 82 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
-python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --cbo] titles not in taxonomy.py
-python -m payroll_sentinel.cli run --cbo               # keyword rules plus the official CBO titles
+python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --no-cbo] titles not in taxonomy.py
+python -m payroll_sentinel.cli run --no-cbo            # keyword rules only, without the CBO titles (v1.0)
 ```
 
 `validate` writes `issues.csv`, `companies.csv` and two files to send back to the
@@ -501,7 +511,7 @@ and opens the browser. The UI has two tabs, plus a third when an LLM key is set:
 * **Evaluation on synthetic data**: pick a seed and a number of companies, run,
   and see the same metrics as `reports/evaluation.md`, with filterable issues and
   CSV/Markdown downloads.
-* **Validate a CSV**: upload your own file. Uploads always use the keyword rules,
+* **Validate a CSV**: upload your own file. Uploads always use the offline rules,
   so payroll data is never sent to an LLM. Download the accepted rows and the rows
   to fix, each with its reason, to send back to the company.
 * **Ask the benchmark**: questions in Portuguese or English, answered as above.
@@ -565,7 +575,7 @@ not for real payroll.
 src/payroll_sentinel/
   taxonomy.py   job families, levels, cities, minimum-wage rule
   generate.py   synthetic submissions + planted errors + ground truth
-  normalize.py  keyword baseline (optionally + CBO) and LLM normalizer (batching, cache, validation)
+  normalize.py  keyword + CBO rules and LLM normalizer (batching, cache, validation)
   cbo_titles.py official CBO 2002 titles and synonyms per family (generated, do not edit)
   llm.py        small OpenAI-compatible client (Gemini / Groq / Ollama), with run stats
   validate.py   rules, peer-comparison ensemble, cause diagnosis, company decision

@@ -1,6 +1,6 @@
 # Held-out title normalization
 
-File `eval/heldout_titles.csv`: 130 hand-written titles not listed in `taxonomy.py`; 114 inside the taxonomy, 16 outside it (empty family: the right answer is to abstain). Normalizer: **keyword rules**.
+File `eval/heldout_titles.csv`: 130 hand-written titles not listed in `taxonomy.py`; 114 inside the taxonomy, 16 outside it (empty family: the right answer is to abstain). Normalizer: **keyword rules only**.
 
 ## 1. Titles inside the taxonomy
 

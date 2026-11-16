@@ -148,7 +148,7 @@ def benchmark_table(submitted: pd.DataFrame, result: ValidationResult) -> pd.Dat
 
 
 def build_benchmark(seed: int = 42, n_companies: int = 25) -> pd.DataFrame:
-    """The synthetic benchmark the README numbers use, validated with the keyword rules."""
+    """The synthetic benchmark the README numbers use, validated with the offline rules."""
     submitted, _ = generate(seed=seed, n_companies=n_companies)
     result = validate(submitted, rule_normalize(submitted["job_title"]), seed=seed)
     return benchmark_table(submitted, result)

@@ -104,8 +104,11 @@ def test_compare_separates_abstention_from_wrong_family():
 def test_eval_titles_with_rules_writes_report(tmp_path, monkeypatch, capsys):
     path = write_csv(tmp_path / "h.csv", [["t1", "data_scientist", "senior"], ["t2", "", ""]])
     run_cli(monkeypatch, path, "--reports", tmp_path / "out")
-    report = (tmp_path / "out" / "titles_heldout_rules.md").read_text(encoding="utf-8")
-    assert "Normalizer: **keyword rules**" in report
+    report = (tmp_path / "out" / "titles_heldout_rules_cbo.md").read_text(encoding="utf-8")
+    assert "Normalizer: **keyword rules + CBO**" in report       # the CBO is on by default
+    run_cli(monkeypatch, path, "--no-cbo", "--reports", tmp_path / "out")
+    plain = (tmp_path / "out" / "titles_heldout_rules.md").read_text(encoding="utf-8")
+    assert "Normalizer: **keyword rules only**" in plain
     assert "| abstained" in report                  # rules do not know the token t1
     assert re.search(r"\| correct abstention\s*\| 1\s*\| 1\.000", report)
     assert re.search(r"\| family accuracy when it answers \| 0\s*\| 0\s*\| n/a", report)

@@ -104,13 +104,13 @@ def evaluation_tab(demo: bool) -> None:
                           max_value=DEMO_MAX_COMPANIES if demo else MAX_COMPANIES)
     if demo:  # no API key on the public server: show the saved LLM run instead
         use_llm = False
-        c3.caption("Titles use the offline keyword rules. See the **LLM results** tab for a "
+        c3.caption("Titles use the offline rules (keywords + CBO titles). See the **LLM results** tab for a "
                    "saved LLM run.")
     else:
         use_llm = c3.checkbox("Normalize titles with an LLM", key="llm",
                               disabled=not llm_available(),
                               help="Needs LLM_API_KEY (or LLM_PROVIDER=ollama) set before "
-                                   "starting the app. Off: free, offline keyword rules.")
+                                   "starting the app. Off: free, offline rules (keywords + CBO titles).")
 
     if st.button("Run evaluation", type="primary", key="run"):
         st.session_state["eval_params"] = (int(seed), int(companies), bool(use_llm))
@@ -129,7 +129,7 @@ def evaluation_tab(demo: bool) -> None:
                f"{int((ev.truth['error_type'] != 'none').sum())} planted errors. "
                f"Title normalizer: **{ev.method}**.")
     if ev.llm_coverage is not None:
-        st.caption(f"Titles answered by the LLM: {ev.llm_coverage:.1%} (the rest fell back to keyword rules).")
+        st.caption(f"Titles answered by the LLM: {ev.llm_coverage:.1%} (the rest fell back to the rules).")
 
     m = st.columns(4)
     m[0].metric("Precision", s["overall"]["precision"], help="Flagged rows that really had an error.")
@@ -161,8 +161,8 @@ def evaluation_tab(demo: bool) -> None:
 def upload_tab() -> None:
     st.write("Upload a payroll CSV to validate it. Required columns: "
              + ", ".join(f"`{c}`" for c in REQUIRED_COLUMNS) + ".")
-    st.info("Uploaded files are processed only on this computer and always use the keyword "
-            "rules: payroll data is never sent to an LLM.")
+    st.info("Uploaded files are processed only on this computer and always use the offline "
+            "rules (keywords + CBO titles): payroll data is never sent to an LLM.")
     st.download_button("Download a sample file (synthetic, with planted errors)", sample_csv(),
                        "sample_submissions.csv", "text/csv", key="dl_sample")
 

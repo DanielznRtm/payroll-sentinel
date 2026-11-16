@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **CBO titles in the default rules.** Titles the keywords miss are looked up in
+  the official CBO 2002 titles and synonyms (held-out family accuracy 61.4 % ->
+  63.2 %, no new wrong family; synthetic F1 unchanged at 0.92). `--no-cbo` gives
+  the v1.0 keyword rules.
+
 ## v1.0.0 (2026-11-15)
 
 Module A is complete, and every number in the README was checked against a report

@@ -2,10 +2,11 @@
 
 Two normalizers share one interface:
 
-* `rule_normalize` - deterministic keyword/regex baseline. Free, instant,
-  explainable, but only knows the spellings it was written for. Optionally
-  (`cbo=True`) it also looks titles up in the official CBO 2002 titles and
-  synonyms of the occupations chosen for each family (cbo_titles.py).
+* `rule_normalize` - deterministic keyword/regex rules. Free, instant,
+  explainable, but only knows the spellings it was written for. By default
+  (`cbo=True`) titles the keywords miss are also looked up in the official CBO
+  2002 titles and synonyms of the occupations chosen for each family
+  (cbo_titles.py); `cbo=False` gives the keyword rules alone.
 * `llm_normalize` - sends the *unique* titles in batches to any
   OpenAI-compatible chat endpoint (Gemini free tier, Groq, local Ollama),
   validates every answer against the taxonomy and caches results on disk.
@@ -86,8 +87,8 @@ def cbo_family(clean: str) -> str | None:
     return CBO_TITLES[best] if best else None
 
 
-def rule_normalize(titles: pd.Series, cbo: bool = False) -> pd.DataFrame:
-    """Keyword rules; with `cbo=True`, titles the keywords miss are looked up in the CBO."""
+def rule_normalize(titles: pd.Series, cbo: bool = True) -> pd.DataFrame:
+    """Keyword rules, then the CBO for titles the keywords miss (`cbo=False`: keywords only)."""
     clean = titles.map(clean_title)
     family = clean.map(lambda c: rule_family(c) if c else None)
     if cbo:

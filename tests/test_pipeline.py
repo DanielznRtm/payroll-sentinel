@@ -114,7 +114,7 @@ def test_rule_normalizer(title, family, level):
 def test_cbo_fills_only_the_titles_the_keywords_miss():
     titles = pd.Series(["Analista de Sistemas Pleno", "Torneiro CNC", "Eletricista de Manutenção Industrial",
                         "Analista de Sucesso do Cliente Sr", "Analista de Dados Sr.", "Motorista"])
-    plain, with_cbo = rule_normalize(titles), rule_normalize(titles, cbo=True)
+    plain, with_cbo = rule_normalize(titles, cbo=False), rule_normalize(titles)
     assert plain["family"].iloc[:4].isna().all()                  # keywords alone miss these
     assert with_cbo["family"].fillna("-").tolist() == [
         "software_engineer", "production_operator", "maintenance_technician", "customer_support",
@@ -129,9 +129,9 @@ def test_cbo_prefers_the_longest_official_title():
     assert cbo_family("eletricistas") is None                       # whole words only
 
 
-def test_cli_refuses_cbo_with_llm(monkeypatch, tmp_path):
+def test_cli_refuses_no_cbo_with_llm(monkeypatch, tmp_path):
     from payroll_sentinel import cli
-    monkeypatch.setattr("sys.argv", ["payroll_sentinel", "run", "--llm", "--cbo"])
+    monkeypatch.setattr("sys.argv", ["payroll_sentinel", "run", "--llm", "--no-cbo"])
     with pytest.raises(SystemExit, match="cannot be combined"):
         cli.main()
 
