@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Web UI for companies, in Portuguese.** The main tab takes a company's payroll
+  as it comes: CSV (comma or semicolon) or Excel, columns recognized by common
+  names and editable, Brazilian values (`R$ 8.500,00`, `25/03/2020`, `Estágio`)
+  read as such (`upload.py`). The result says what to accept, review and block,
+  with the reason and what to do, plus an Excel report and the files to send back.
+- **Reference peers for a single file.** One company rarely has 15 peers of the
+  same family and level, so an uploaded file is validated together with the clean
+  synthetic benchmark (`validate_against_reference`). Measured on seed 7, each
+  company on its own: errors caught 69.7 % -> 78.9 % (annual salaries typed as
+  monthly 4 -> 22 of 33), false alarms 0.21 % -> 0.39 %. Companies can give a
+  family to titles the rules do not know.
+- **Uploads on the public demo**, processed in memory for the session only, never
+  sent to an LLM, capped at 5 MB and 20,000 rows. New `[ui]` dependency: openpyxl.
+- **README in Portuguese and condensed**; the full English write-up moved to
+  `docs/technical-report.md`.
+
 ## v1.1.0 (2026-11-15)
 
 The synthetic salaries are now fitted to RAIS 2025 job records. Every synthetic

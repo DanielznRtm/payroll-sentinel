@@ -11,8 +11,10 @@ for AI and data internships. The point is to show end-to-end AI delivery with
 
 ## How to work with me
 
-- Talk to me in **Brazilian Portuguese**. Code, comments, commit messages, README
-  and docs stay in **English**.
+- Talk to me in **Brazilian Portuguese**. Code, comments, commit messages and docs
+  (CHANGELOG, `docs/technical-report.md`, reports) stay in **English**. Since
+  2026-11-16 (user decision) `README.md` and the web UI texts are in **Portuguese**:
+  the README is a short overview, and every detail lives in the technical report.
 - I am learning. Before a change, tell me in 1 to 3 sentences what you will do and
   why. After it, explain any concept I may not know (e.g. why median/MAD instead of
   mean/std). I must be able to defend every line in an interview.
@@ -58,7 +60,12 @@ CI (`.github/workflows/tests.yml`) runs the tests and the full pipeline on Pytho
 
 Data flows `generate` → `normalize` (rules or LLM) → `validate` → `evaluate`;
 `pipeline.py` wires them as plain functions, used by both `cli.py` and the
-Streamlit UI in `app.py`. Uploads in the UI always use rules, never the LLM. `taxonomy.py` holds the job families, levels, cities, the
+Streamlit UI in `app.py`. Uploads in the UI always use rules, never the LLM: the
+user decided the public demo accepts uploads, processed in memory for the session
+only (no `st.cache_data` on uploaded data), capped at 5 MB / 20,000 rows. `upload.py`
+reads CSV/Excel in Brazilian formats and maps columns; `validate_against_reference`
+validates one file with the clean synthetic benchmark as peers (seed 7, each company
+alone: errors caught 69.7 % -> 78.9 %). `taxonomy.py` holds the job families, levels, cities, the
 pay parameters fitted to RAIS (`pay_sigma`, city index by kind of job) and the
 2026 minimum wage (R$ 1,621, prorated by weekly hours; internship stipends are
 exempt). `validate.py` has two layers: deterministic rules, then a peer comparison
