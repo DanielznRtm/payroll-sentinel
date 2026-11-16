@@ -61,7 +61,7 @@ def test_demo_mode_hides_upload(monkeypatch):
     assert not at.checkbox                           # no LLM checkbox at all
     assert at.slider(key="companies").max == 50
     assert at.info[0].value.startswith("Public demo: synthetic data only.")
-    assert "precision **0.959**" in at.tabs[1].markdown[0].value
+    assert "precision **0.913**" in at.tabs[1].markdown[0].value
 
 
 def test_app_runs_evaluation(app):

@@ -19,8 +19,8 @@ import unicodedata
 import numpy as np
 import pandas as pd
 
-from .taxonomy import (CITIES, FAMILIES, LEVEL_MULTIPLIER, LEVELS, NO_INTERN_FAMILIES,
-                       REFERENCE_DATE, SECTORS, legal_min_wage)
+from .taxonomy import (CITIES, FAMILIES, INTERN_PAY_SIGMA, LEVEL_MULTIPLIER, LEVELS,
+                       NO_INTERN_FAMILIES, REFERENCE_DATE, SECTORS, city_index, legal_min_wage)
 
 LEVEL_WEIGHTS = [0.08, 0.25, 0.32, 0.25, 0.10]
 
@@ -102,8 +102,10 @@ def _clean_records(rng: np.random.Generator, n_companies: int) -> pd.DataFrame:
                 part_time = family == "customer_support" and rng.random() < 0.20
                 hours = 30 if part_time else int(rng.choice([44, 40], p=[0.6, 0.4]))
 
-            salary = (FAMILIES[family]["mid_salary"] * LEVEL_MULTIPLIER[level] * pay_factor
-                      * CITIES[city] * rng.lognormal(0, 0.15))
+            fam = FAMILIES[family]
+            sigma = INTERN_PAY_SIGMA if level == "intern" else fam["pay_sigma"]
+            salary = (fam["mid_salary"] * LEVEL_MULTIPLIER[level] * pay_factor
+                      * city_index(city, family) * rng.lognormal(0, sigma))
             if hours == 30 and contract == "CLT":
                 salary *= 30 / 44
             if contract == "CLT":  # employers in this world respect the law

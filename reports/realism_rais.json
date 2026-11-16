@@ -1,0 +1,56 @@
+{
+  "source": "RAIS_VINC_PUB_SP.7z",
+  "jobs compared": 361437,
+  "families (São Paulo)": {
+    "customer_support": {
+      "rows": 37796,
+      "median": 3808.89,
+      "log-pay SD": 0.7237
+    },
+    "data_scientist": {
+      "rows": 884,
+      "median": 12719.39,
+      "log-pay SD": 0.5757
+    },
+    "financial_analyst": {
+      "rows": 30580,
+      "median": 6689.61,
+      "log-pay SD": 0.5704
+    },
+    "hr_analyst": {
+      "rows": 27428,
+      "median": 5272.2,
+      "log-pay SD": 0.5427
+    },
+    "maintenance_technician": {
+      "rows": 28111,
+      "median": 4576.0,
+      "log-pay SD": 0.5991
+    },
+    "production_operator": {
+      "rows": 50135,
+      "median": 2473.99,
+      "log-pay SD": 0.3867
+    },
+    "sales_rep": {
+      "rows": 35059,
+      "median": 4758.0,
+      "log-pay SD": 0.801
+    },
+    "software_engineer": {
+      "rows": 99865,
+      "median": 10268.33,
+      "log-pay SD": 0.6633
+    }
+  },
+  "city index": {
+    "Campinas": {
+      "industrial": 1.106,
+      "office": 0.9416
+    },
+    "Sorocaba": {
+      "industrial": 1.1424,
+      "office": 0.7966
+    }
+  }
+}

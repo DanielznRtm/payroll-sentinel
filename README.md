@@ -53,7 +53,7 @@ Decision for the company: accept the file without the blocked rows, or ask for a
 
 | What | Result |
 |---|---|
-| Errors caught (recall), with LLM titles | 97 % (precision 96 %) |
+| Errors caught (recall), with LLM titles, on pay spread fitted to real job records | 82 % (precision 91 %; 97 % with the narrower v1.0 spread) |
 | Real job titles mapped to the right family | 97.4 % (offline rules: 63.2 %) |
 | Questions answered right / out-of-scope questions refused | 27 of 30 / 5 of 5 |
 | Public data: Indian salary rows reaching the peer comparison | 99.2 % (offline rules: 2.7 %) |
@@ -67,7 +67,7 @@ Payroll Sentinel is the first of three modules that build on each other:
 
 | Module | What it does | Status |
 |---|---|---|
-| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v1.0, this repo |
+| **A. Payroll Sentinel** | Validates payroll data before it enters a salary benchmark | v1.1, this repo |
 | **B. Labor-claim triage** | Reads a labor-claim petition, extracts each claim with an LLM and checks it against the validated payroll. Taxes and labor-law amounts come from a deterministic calculation engine, never from the LLM | Planned |
 | **C. Pay-fairness tool** | A public tool that tells a person whether their pay is fair: market percentile, net income after work-related costs, and CLT vs. contractor (PJ) | Specified |
 
@@ -106,43 +106,69 @@ read, and C's comparisons are only as good as the data behind them.
 
 ## Results
 
-Default run: 4,502 records, 25 companies, 242 planted errors (seed 42). The same
-validator was run twice, changing only how job titles are normalized: free,
-offline rules (keywords plus the official CBO titles, [below](#official-brazilian-occupation-titles-cbo)),
+Default run: 4,502 records, 25 companies, 242 planted errors (seed 42), with
+salaries whose spread is fitted to RAIS, Brazil's official job records (v1.1,
+[below](#how-realistic-are-the-synthetic-salaries)). The same validator was run
+twice, changing only how job titles are normalized: free, offline rules (keywords
+plus the official CBO titles, [below](#official-brazilian-occupation-titles-cbo)),
 and an LLM (`gemini-3.5-flash-lite`, Gemini free tier). With rules, results are
-stable across seeds 7, 42 and 123 (F1 between 0.920 and 0.932); the LLM run is a
-single run on seed 42.
+stable across seeds 7, 42 and 123 (F1 between 0.835 and 0.862); the LLM answers
+come from one run on seed 42.
 
 | Metric | Rules (keywords + CBO) | LLM titles |
 |---|---|---|
-| Precision (flagged rows that really had an error) | 0.96 | 0.96 |
-| Recall (errored rows that got flagged) | 0.88 | **0.97** |
-| F1 | 0.92 | **0.96** |
-| False alarms on clean rows | 0.21 % | 0.23 % |
-| Long-tail titles mapped to the right job family | 7.7 % | **96.5 %** |
+| Precision (flagged rows that really had an error) | 0.892 | **0.913** |
+| Recall (errored rows that got flagged) | 0.785 | **0.822** |
+| F1 | 0.835 | **0.865** |
+| False alarms on clean rows | 0.54 % | 0.45 % |
+| Long-tail titles mapped to the right job family | 7.7 % | **99.5 %** |
 | Real held-out titles mapped to the right job family ([below](#held-out-titles-from-real-job-postings)) | 63.2 % | **97.4 %** |
 | Statistical errors visible to the peer comparison | 63 / 81 | **81 / 81** |
-| Cause correctly identified, when detected | 96–100 % per error type | 97–100 % per error type |
+| Cause correctly identified, when detected | 85–100 % per error type | 85–100 % per error type |
 
-With LLM titles, recall equals the recall with perfect (oracle) titles: 0.967.
+With LLM titles, recall equals the recall with perfect (oracle) titles: 0.822.
 What it still misses is the detection floor described below, not titles.
 
 Peer-comparison detectors on the statistical error types (rules run):
 
 | Detector | Precision | Recall | F1 |
 |---|---|---|---|
-| Robust z-score | 0.85 | 0.84 | 0.85 |
-| IQR fence | 0.71 | 0.95 | 0.81 |
-| Isolation Forest | 0.48 | 0.52 | 0.50 |
-| **Majority vote** | **0.85** | **0.84** | **0.85** |
+| Robust z-score | 0.42 | 0.44 | 0.43 |
+| IQR fence | 0.47 | 0.54 | 0.50 |
+| Isolation Forest | 0.25 | 0.29 | 0.27 |
+| **Majority vote** | **0.56** | **0.46** | **0.50** |
 
 The full reports, including per-error-type numbers and company decisions, are in
 [`reports/evaluation.md`](reports/evaluation.md) (rules; keywords alone in
 [`evaluation_keywords_only.md`](reports/evaluation_keywords_only.md)) and
 [`reports/evaluation_llm_gemini-3.5-flash-lite.md`](reports/evaluation_llm_gemini-3.5-flash-lite.md) (LLM).
-The LLM report and the pipeline runs in `reports/models/` predate the two-way cause
-diagnosis: that change leaves flags, precision and recall as they are, so only
-their cause and company tables would read differently today.
+The LLM report reuses the cached answers of the `gemini-3.5-flash-lite` run in
+[Comparing models](#comparing-models), so it made no API call.
+
+### What a realistic pay spread does to detection
+
+v1.0 drew each salary with a spread I chose (log-pay SD 0.15 per person). In v1.1
+the spread is fitted to 361,437 real job records, and the median spread of log pay
+inside a peer group (family and level) went from 0.21 to 0.50. The validator did
+not change. Seed 42, same LLM answers in both columns:
+
+| | v1.0 spread | v1.1 spread (RAIS) |
+|---|---|---|
+| F1, rules | 0.920 | 0.835 |
+| F1, LLM titles | 0.963 | 0.865 |
+| Recall, LLM titles (equal to perfect titles) | 0.967 | 0.822 |
+| Level mismatches caught, LLM titles | 37 / 45 | 4 / 45 |
+| Annual salaries typed as monthly caught, LLM titles | 36 / 36 | 34 / 36 |
+| False alarms on clean rows, LLM titles | 0.23 % | 0.45 % |
+
+A level mismatch is the salary of another level, about 2.4 to 3.3 times off, up or
+down. With a spread of 0.50 that is only 1.7 to 2.4 standard deviations from the
+peer median, among normal salaries. An annual salary typed as monthly (12 times) is
+still about 5 standard deviations away and is still caught, and the rules are
+untouched: seven of the nine error types stay at 100 % recall. RAIS has no
+seniority level, so the generator keeps its level steps and puts the rest of the
+real spread inside the peer group. If real levels are further apart than the
+generator's, v1.1 is pessimistic and the truth lies between the two columns.
 
 ### Held-out titles from real job postings
 
@@ -191,14 +217,14 @@ still comes from the title. This is part of the default rules since v1.1
 | Held-out titles: wrong family | 0.9 % | 0.9 % |
 | Held-out titles outside the taxonomy left unmapped | 13 / 16 | 13 / 16 |
 | Synthetic long-tail titles: right family (seed 42) | 4 % | 7.7 % |
-| Synthetic F1 (seed 42) | 0.92 | 0.92 |
+| Synthetic F1 (seed 42, v1.1 data) | 0.831 | 0.835 |
 
 The CBO helps where companies write official Portuguese titles: it recovered
 `Supervisor de Manutenção Industrial` and `Estagiário de Customer Success
 Manager`, and it never mapped a title outside the taxonomy. It does not help with
 English and tech jargon (`SWE`, `Account Executive`, `Analista de BI`), which is
-where the long tail is. On seeds 7 and 123, F1 moved from 0.925 to 0.932 and
-stayed at 0.924. On the three public files the share of titled rows did not change,
+where the long tail is. On seeds 7 and 123, F1 moves from 0.848 to 0.851 and from
+0.865 to 0.862: within noise either way. On the three public files the share of titled rows did not change,
 since their titles are in English or Italian. The gain is small, but it never
 added a wrong family, so the CBO became part of the default rules in v1.1; the LLM
 remains the main lever. Reports: held-out
@@ -211,7 +237,12 @@ remains the main lever. Reports: held-out
 
 Each model ran once, on free tiers, through the same two tests: the full pipeline
 (seed 42, `run --llm --no-cache`, 36 batches of 40 titles) and the 130 held-out
-titles (`eval-titles --llm`, 4 batches).
+titles (`eval-titles --llm`, 4 batches). The pipeline runs used the v1.0 synthetic
+data, the rules row too. The title columns do not depend on salaries; detection F1
+does. With v1.1 data and the same cached answers, `gemini-3.5-flash-lite` scores
+0.865 and the rules 0.835 ([Results](#results)); the other two models ran without
+a cache, so their F1 was not recomputed. These pipeline reports also predate the
+two-way cause diagnosis, which changes only their cause and company tables.
 
 | Model (provider) | Long-tail family (synthetic, 1,109 rows) | Held-out family (114 real titles) | Wrong family on held-out (false mappings, of 16 outside) | Detection F1 | Titles answered by the LLM | 429 responses | Total time (pipeline titles) | Cost |
 |---|---|---|---|---|---|---|---|---|
@@ -237,10 +268,9 @@ titles, but the free tier cannot sustain it for a 36-call run, and Groq's
   answer replaces the rule answer, it does worse than rules on common titles
   (96.5 % vs 100 %), and only 71 of the 81 statistical errors stay visible.
   False alarms nearly double: 18 clean rows flagged instead of 10 (0.42 % vs 0.23 %).
-* **Single runs vary.** The Results table above shows 96.5 % long-tail accuracy
-  for `gemini-3.5-flash-lite`: that is an earlier run of the same model and seed,
-  and its report feeds the demo. Treat differences of a few points between single
-  runs as noise.
+* **Single runs vary.** An earlier run of `gemini-3.5-flash-lite` on the same seed
+  mapped 96.5 % of long-tail titles instead of 99.5 %, and its report fed the demo
+  until v1.1. Treat differences of a few points between single runs as noise.
 * A local Ollama model was not measured: it needs an NVIDIA GPU, and the
   development machine has none.
 
@@ -274,6 +304,8 @@ median per family instead of one for both together, a reading flagged as
 ambiguous during the review. As with the titles, the prompt was not changed after
 these results. Run: 30 calls, 2 rate-limit (429) responses, 143 s. Report:
 [`reports/ask_eval_gemini_gemini-3.5-flash-lite.md`](reports/ask_eval_gemini_gemini-3.5-flash-lite.md).
+These results do not depend on the salaries (two errors are refusals, the third
+groups by family), so the v1.1 recalibration leaves them as they are.
 
 ### Public salary data (no ground truth)
 
@@ -365,99 +397,139 @@ at senior or lead inconsistently.
 
 ### How realistic are the synthetic salaries?
 
-The generator's salaries are made up, so I checked them against State of Data
-Brazil 2025-2026, a survey of Brazilian data professionals by Data Hackers and Bain
-(Kaggle; not in the repository). [`scripts/state_of_data_check.py`](scripts/state_of_data_check.py)
-reads only six columns: work status, manager flag, job, level, salary band and
-state. It never reads age, gender or race. It keeps CLT employees who are not
-managers, the closest match to a payroll file (1,037 answers). Salaries come in
-bands, so the survey medians are grouped-data medians, interpolated inside the
-band that holds the middle answer.
+The generator's salaries are made up, so I checked them against two real sources,
+and in v1.1 fitted the generator to one of them.
 
-| Brazil, monthly median | Junior | Mid | Senior | Lead (specialist/staff) |
+**State of Data Brazil.** A 2025-2026 survey of Brazilian data professionals by
+Data Hackers and Bain (Kaggle; not in the repository).
+[`scripts/state_of_data_check.py`](scripts/state_of_data_check.py) reads only six
+columns: work status, manager flag, job, level, salary band and state. It never
+reads age, gender or race. It keeps CLT employees who are not managers, the closest
+match to a payroll file (1,037 answers). Salaries come in bands, so the survey
+medians are grouped-data medians, interpolated inside the band that holds the
+middle answer. The survey was not used for fitting, so it stays an independent
+check.
+
+| Brazil, monthly median (v1.1) | Junior | Mid | Senior | Lead (specialist/staff) |
 |---|---|---|---|---|
 | Data analyst, survey | R$ 4,200 | R$ 6,457 | R$ 9,563 | R$ 13,100 |
-| Data analyst, synthetic | R$ 4,210 | R$ 6,550 | R$ 9,410 | R$ 12,915 |
+| Data analyst, synthetic | R$ 4,130 | R$ 6,775 | R$ 9,455 | R$ 12,775 |
 | Data scientist, survey | R$ 6,875 | R$ 9,241 | R$ 14,714 | R$ 17,059 |
-| Data scientist, synthetic | R$ 6,280 | R$ 9,520 | R$ 13,770 | R$ 18,565 |
+| Data scientist, synthetic | R$ 6,330 | R$ 9,225 | R$ 13,210 | R$ 18,075 |
 
-For the two data families, synthetic medians are within 10 % of the survey
-nationwide, and the level steps match: a senior data analyst earns 1.48× the
-mid-level median in the survey and 1.44× in the synthetic data. São Paulo, where
-the generator sets its base salaries, is less close: synthetic medians run up to
-18 % high, for lead data scientists. A data survey is a poor sample of other
-roles. It has fewer than 15 product managers per level, and only 18 mid-level and
-24 senior software engineers: their medians match the synthetic data at senior level,
-while the synthetic mid level is 44 % higher. The survey also had one malformed
-answer of its own: a salary band "from R$ 25,001 to R$ 3,000". Report:
-[`reports/realism_state_of_data.md`](reports/realism_state_of_data.md).
+For the two data families, synthetic medians are within 11 % of the survey
+nationwide at every level, and the level steps are close: a senior data analyst
+earns 1.48× the mid-level median in the survey and 1.40× in the synthetic data.
+São Paulo, where the generator sets its base salaries, is less close: synthetic
+medians run up to 28 % high, for mid-level data analysts. A data survey is a poor
+sample of other roles. It has fewer than 15 product managers per level, and only
+18 mid-level and 24 senior software engineers: their medians match the synthetic
+data at senior level, while the synthetic mid level is 47 % higher. The survey also
+had one malformed answer of its own: a salary band "from R$ 25,001 to R$ 3,000".
+Report: [`reports/realism_state_of_data.md`](reports/realism_state_of_data.md).
 
-**Real pay from RAIS.** RAIS is Brazil's official record of every formal job,
-published without names or IDs. [`scripts/rais_check.py`](scripts/rais_check.py)
-reads the 2025 São Paulo file (25.5 million rows) as a stream from the
-`.7z` archive in about 3 minutes. It uses seven columns (occupation, municipality,
-active on 31 December, hours, contract type, intermittent flag, December pay) and
-never age, sex, race, nationality, disability or schooling. It keeps full-time CLT
-jobs in the CBO codes approved for each family, in São Paulo, Campinas and
-Sorocaba: 509,542 jobs (36,904 more had no December pay). RAIS has no seniority
-level, so both sides pool every level, and RAIS pay includes overtime and
-commissions while the synthetic salary is base pay.
+**RAIS.** RAIS is Brazil's official record of every formal job, published without
+names or IDs. [`scripts/rais_check.py`](scripts/rais_check.py) reads the 2025 São
+Paulo file (25.5 million rows) as a stream from the `.7z` archive in under
+3 minutes. It uses seven columns (occupation, municipality, active on 31 December,
+hours, contract type, intermittent flag, December pay) and never age, sex, race,
+nationality, disability or schooling. It keeps full-time CLT jobs in the CBO codes
+approved for each family, in São Paulo, Campinas and Sorocaba: 509,542 jobs (36,904
+more had no December pay). RAIS has no seniority level, so both sides pool every
+level, and RAIS pay includes overtime and commissions while the synthetic salary is
+base pay.
 
-| 3 cities | Real median | Synthetic median | Synthetic / real | Real log-pay SD | Synthetic log-pay SD |
-|---|---|---|---|---|---|
-| Software engineer | R$ 10,093 | R$ 10,100 | 1.00 | 0.66 | 0.42 |
-| Financial analyst | R$ 6,573 | R$ 6,440 | 0.98 | 0.57 | 0.42 |
-| HR analyst | R$ 5,224 | R$ 5,530 | 1.06 | 0.54 | 0.40 |
-| Production operator | R$ 2,594 | R$ 2,390 | 0.92 | 0.40 | 0.37 |
-| Data scientist | R$ 12,413 | R$ 11,160 | 0.90 | 0.59 | 0.42 |
-| Maintenance technician | R$ 4,639 | R$ 4,035 | 0.87 | 0.60 | 0.40 |
-| Customer support | R$ 3,857 | R$ 3,130 | 0.81 | 0.72 | 0.40 |
-| Sales rep | R$ 3,267 | R$ 5,960 | **1.82** | 0.84 | 0.42 |
+Compared with RAIS, v1.0 showed three gaps. Real pay is far more spread out
+(log-pay SD 0.54 to 0.84, against about 0.40). One index per city cannot say that
+factory jobs pay more outside São Paulo while office jobs pay less. And the sales
+and support families pool jobs with very different pay. Two definitions settled the
+last point. Sales is compared only on its B2B codes (wholesale, technical sales and
+sales representatives): retail sellers (67 % of the CBO sales jobs, median
+R$ 2,713) and sales managers (R$ 17,000) are not what the synthetic sales family
+models, so they stay in the title lookup but leave the comparison, which keeps
+361,437 jobs. Support keeps all its codes, IT support (R$ 5,000), contact centre
+(R$ 2,077 to R$ 2,937) and customer success, because the synthetic titles cover all
+three.
 
-* **Medians are close for most families.** Five of the eight are within 10 % of
-  real pay, and maintenance is 13 % low.
-* **Sales and support differ by definition, not by salary.** In the CBO codes,
-  67 % of sales jobs are retail sellers, with a median of R$ 2,713, and 11 % are
-  sales managers, at R$ 17,000. The synthetic family models B2B account
-  executives. In support, IT support analysts (R$ 5,000) sit next to telemarketing
-  operators (R$ 2,077 to R$ 2,937).
-* **Real pay is more spread out.** Within a family, the real spread of log pay is
-  0.54 to 0.84, except for production operators (0.40). The synthetic spread is
-  about 0.40. Errors hide more easily in real data than in the synthetic set,
-  so the synthetic recall is optimistic.
-* **One index per city is too simple.** Production operators earn more in
-  Campinas (R$ 3,087) and Sorocaba (R$ 2,964) than in São Paulo (R$ 2,474), while
-  software engineers earn less (R$ 9,117 and R$ 7,495 against R$ 10,268). The
-  generator applies one multiplier to every family in a city (0.92 and 0.85).
+[`scripts/calibrate_generator.py`](scripts/calibrate_generator.py) then fits three
+things, and nothing else:
 
-Nothing was recalibrated yet. Doing it would change every synthetic number in this
-README. Report: [`reports/realism_rais.md`](reports/realism_rais.md).
+* **the spread** of each family (`pay_sigma`), so that the synthetic log-pay SD in
+  São Paulo equals the real one. Data analyst and product manager have no CBO code
+  and take the median of the office families. Interns keep the v1.0 spread: an
+  internship is not a CLT job, so RAIS has none;
+* **the city index by kind of job**, from the same occupation's pay in each city.
+  Factory jobs pay 11 % more in Campinas and 14 % more in Sorocaba than in São
+  Paulo, and office jobs 6 % and 20 % less. The other seven cities keep their v1.0
+  index, because the RAIS file covers São Paulo state only;
+* **the base salary of sales and support**, the two families whose definitions
+  changed.
+
+Medians and spreads are fitted in São Paulo, where the generator sets its base
+salaries. Pooling the three cities would mix in each side's city mix: RAIS is
+mostly São Paulo (73 to 92 % of the jobs, by family), while the generator spreads
+rows evenly across cities.
+
+| São Paulo | Real median | Synthetic median, v1.0 → v1.1 | Real log-pay SD | Synthetic log-pay SD, v1.0 → v1.1 |
+|---|---|---|---|---|
+| Software engineer | R$ 10,268 | R$ 10,830 → R$ 10,795 | 0.66 | 0.42 → 0.67 |
+| Data scientist | R$ 12,719 | R$ 10,530 → R$ 11,350 | 0.58 | 0.41 → 0.57 |
+| Financial analyst | R$ 6,690 | R$ 6,920 → R$ 7,220 | 0.57 | 0.44 → 0.57 |
+| HR analyst | R$ 5,272 | R$ 5,770 → R$ 6,020 | 0.54 | 0.38 → 0.54 |
+| Sales rep (B2B codes) | R$ 4,758 | R$ 6,450 → R$ 4,750 | 0.80 | 0.42 → 0.80 |
+| Maintenance technician | R$ 4,576 | R$ 4,410 → R$ 4,700 | 0.60 | 0.38 → 0.60 |
+| Customer support | R$ 3,809 | R$ 3,450 → R$ 3,825 | 0.72 | 0.41 → 0.72 |
+| Production operator | R$ 2,474 | R$ 2,540 → R$ 2,540 | 0.39 | 0.37 → 0.39 |
+
+* **In São Paulo the spread matches by construction**, since that is what the fit
+  does. Medians that were not fitted moved by 8 % or less; the largest gaps left are
+  HR analysts, 14 % high, and data scientists, 11 % low. Quartiles agree within
+  21 %; the largest gap is the first quartile of support (R$ 2,000 against
+  R$ 2,519).
+* **Outside São Paulo the comparison is still a check.** Factory families now land
+  within 8 % of real pay in Campinas and Sorocaba (v1.0: 21 to 27 % low). Office
+  families still range from 0.73 (support) to 1.26 (financial analysts) of real
+  pay, leaving aside 71 data scientists in Campinas: one index per kind of job
+  cannot say that support pays more outside the capital while finance pays less.
+* **The fit leans pessimistic.** RAIS December pay includes overtime and
+  commissions, which widen the real spread (most of all in sales) beyond what base
+  pay alone would show, and the generator puts all the spread its levels do not
+  explain inside the peer group.
+
+What this does to detection is in
+[Results](#what-a-realistic-pay-spread-does-to-detection). Report:
+[`reports/realism_rais.md`](reports/realism_rais.md); the fitted targets are in
+[`reports/realism_rais.json`](reports/realism_rais.json).
 
 ## What I learned
 
-1. **The bottleneck is titles, not anomaly detection.** Keyword rules map 100 %
-   of common titles but only 4 % of long-tail ones (`SWE`, `HRBP`,
-   `Account Executive`), and the official CBO titles raise that only to 7.7 %.
-   That leaves 23 % of rows with no peer group, hiding 18 of the 81 statistical
-   errors. With perfect titles, the same validator's recall
-   rises from **0.88 to 0.97**. An LLM normalizer closed that gap entirely
-   (recall 0.967, the oracle value) at zero cost.
-2. **The LLM fails safe here.** It got 39 of 4,484 titled rows wrong, and every
-   one was an abstention ("no family"), never a wrong family: an unmapped row is
+1. **Titles were the first bottleneck.** Keyword rules map 100 % of common titles
+   but only 4 % of long-tail ones (`SWE`, `HRBP`, `Account Executive`), and the
+   official CBO titles raise that only to 7.7 %. That leaves 23 % of rows with no
+   peer group, hiding 18 of the 81 statistical errors. An LLM normalizer closed
+   that gap at zero cost: its recall equals the recall with perfect titles. With
+   the v1.0 pay spread that lifted recall from 0.88 to 0.97; with the RAIS spread,
+   from 0.785 to 0.822, because the detection floor (lesson 5) now hides most of
+   what is left.
+2. **The LLM fails safe here.** It got 6 of 4,484 titled rows wrong in the run
+   behind these numbers (39 in an earlier run), and every one was an abstention ("no family"), never a wrong family: an unmapped row is
    only left out of the peer comparison, while a wrong family would compare it
    against the wrong peers. I did not tune the prompt on these misses: tuning the
    prompt on the errors of the evaluation set would inflate the very number I am
    reporting.
 3. **Rules should go first.** Seven of the nine error types reach 100 % recall
    with plain rules, at zero cost and with an explanation anyone can read.
-4. **The ensemble mostly fixes IQR's false alarms.** Isolation Forest adds little
-   on a one-dimensional problem like this one. The majority vote ends up about as
-   good as the robust z-score alone, but noticeably more precise than the IQR fence.
-   I kept all three in the report because a weak detector is a finding too.
-5. **There is a detection floor.** Level mismatches smaller than about 2.5× the
-   peer median sit inside normal pay dispersion (log-salary SD around 0.3 within a
-   group) and are often missed. Catching them would need richer context, such as
-   the company's own pay bands, not a better outlier detector.
+4. **The majority vote buys precision.** Isolation Forest is weak on a
+   one-dimensional problem like this one (F1 0.27), but as a third vote it lets two
+   detectors overrule one: the vote is the most precise detector (0.56, against
+   0.42 for the robust z-score and 0.47 for the IQR fence, rules run). I kept all
+   three in the report because a weak detector is a finding too.
+5. **There is a detection floor, and real pay spread sets it.** A level mismatch
+   (the salary of another level, about 2.4 to 3.3 times off) is a big error, but
+   inside a peer group whose log pay spreads like RAIS (SD 0.50) it looks like a
+   normal salary: with LLM titles, 4 of 45 are caught, against 37 of 45 with the
+   v1.0 spread (0.21). Catching them would need richer context, such as the
+   company's own pay bands, not a better outlier detector.
 6. **On a free tier, the limit picks the model.** The most accurate model on real
    titles could not finish a full run without rate limits, and a weaker model
    scored below plain rules on titles the rules already knew. A model is only as
@@ -467,6 +539,10 @@ README. Report: [`reports/realism_rais.md`](reports/realism_rais.md).
    salaries in an annual field, legitimate top pay that looked like a typo, and
    rows copied under new IDs. Each fix was measured on the synthetic set first,
    so it could not quietly break what already worked.
+8. **A synthetic benchmark is only as honest as its noise.** v1.0 reported recall
+   0.97 on salaries whose spread I made up. Fitting the spread to 361,437 real job
+   records cut it to 0.82 without changing a line of the validator. The fitted
+   number is the one to defend; the v1.0 one is a ceiling.
 
 ## Run it
 
@@ -474,7 +550,7 @@ README. Report: [`reports/realism_rais.md`](reports/realism_rais.md).
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 82 tests (4 skip without the [ui] extra)
+pytest                                                 # 86 tests (4 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --no-cbo] titles not in taxonomy.py
 python -m payroll_sentinel.cli run --no-cbo            # keyword rules only, without the CBO titles (v1.0)
@@ -573,7 +649,7 @@ not for real payroll.
 
 ```
 src/payroll_sentinel/
-  taxonomy.py   job families, levels, cities, minimum-wage rule
+  taxonomy.py   job families, levels, cities (index by kind of job), pay parameters, minimum-wage rule
   generate.py   synthetic submissions + planted errors + ground truth
   normalize.py  keyword + CBO rules and LLM normalizer (batching, cache, validation)
   cbo_titles.py official CBO 2002 titles and synonyms per family (generated, do not edit)
@@ -589,6 +665,7 @@ scripts/        public_data_check.py: titles and full validation on public salar
                 build_cbo_titles.py: rebuilds cbo_titles.py from the CBO tables (codes per family)
                 state_of_data_check.py: synthetic salaries vs. the State of Data Brazil survey
                 rais_check.py: synthetic salaries vs. RAIS official job records (streamed from .7z)
+                calibrate_generator.py: fits the generator's pay spread, city index and two medians to RAIS
 app.py          Streamlit web UI (`streamlit run app.py`, or run_ui.bat on Windows)
 tests/          rules, normalizers, LLM parsing/caching (with a fake client), end-to-end quality, UI smoke test
 ```
@@ -597,12 +674,13 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 
 * The data is synthetic. Level markers follow regular patterns, so level accuracy
   is 100 % here; on the 114 real held-out titles, LLM level accuracy is 89.5 %.
-  Synthetic medians are close to real pay (a survey for the data families, RAIS
-  for eight families), but real pay is more spread out, so the synthetic recall is
-  optimistic. The sales and support families pool jobs with very different pay.
+  Pay spread is fitted to RAIS in São Paulo, but RAIS has no level, so how much of
+  the real spread sits inside a peer group is an assumption (v1.1 puts all of it
+  there). Seven cities keep an index no real data checked, and every family shares
+  the same level steps.
 * The synthetic long-tail titles come from a fixed list of abbreviations and
   English titles (`SWE`, `HRBP`), which a large model has likely seen before.
-  The 96.5 % long-tail accuracy is measured on that list. The real-title check
+  The 99.5 % long-tail accuracy is measured on that list. The real-title check
   (97.4 % family accuracy) uses only 130 titles, labeled by one person.
 * Each model in the comparison ran once, on one seed. A local Ollama model is
   still unmeasured, because it needs an NVIDIA GPU.

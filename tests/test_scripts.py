@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from rais_check import COLS, keep, stats  # noqa: E402
+from calibrate_generator import next_sigma  # noqa: E402
+from rais_check import COLS, city_index, keep, stats  # noqa: E402
 from state_of_data_check import band_bounds, grouped_median  # noqa: E402
 
 
@@ -35,6 +36,25 @@ def test_rais_stats_reports_median_quartiles_and_log_spread():
     s = stats(pd.Series([1000.0, 2000.0, 4000.0]))
     assert (s["rows"], s["median"]) == (3, 2000.0)
     assert s["log-pay SD"] == pytest.approx(np.std(np.log([1000, 2000, 4000])))
+
+
+def test_rais_city_index_compares_the_same_occupation_by_kind_of_job():
+    def jobs(cbo, family, city, pay, n):
+        return pd.DataFrame({"cbo": [cbo] * n, "family": [family] * n, "city": [city] * n, "pay": [pay] * n})
+    df = pd.concat([
+        jobs("212405", "software_engineer", "São Paulo", 10000.0, 40),
+        jobs("212405", "software_engineer", "Campinas", 9000.0, 30),       # office: 0.9
+        jobs("784205", "production_operator", "São Paulo", 2500.0, 30),
+        jobs("784205", "production_operator", "Campinas", 3000.0, 30),     # industrial: 1.2
+        jobs("721215", "production_operator", "Campinas", 9999.0, 10),     # too few jobs: ignored
+    ])
+    got = city_index(df).set_index("kind")["index"]
+    assert got.to_dict() == pytest.approx({"industrial": 1.2, "office": 0.9})
+
+
+def test_calibration_adds_only_the_missing_variance():
+    assert next_sigma(0.15, 0.50, 0.40) == pytest.approx(np.sqrt(0.15 ** 2 + 0.50 ** 2 - 0.40 ** 2))
+    assert next_sigma(0.15, 0.30, 0.40) == 0.05                    # never below the floor
 
 
 def test_band_bounds_reads_survey_salary_bands():
