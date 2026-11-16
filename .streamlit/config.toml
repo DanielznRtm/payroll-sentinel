@@ -5,6 +5,11 @@ gatherUsageStats = false
 [server]
 # Skip the first-run e-mail prompt in the terminal. run_ui.bat opens the browser itself.
 headless = true
+# Largest file a company can upload, in MB (a payroll of 20,000 rows is far smaller).
+maxUploadSize = 5
 # server.address is not set here on purpose: the public demo on Streamlit Community
 # Cloud must answer its proxy. Local runs pass --server.address localhost instead
 # (run_ui.bat and the README command), so only this computer can open the app.
+
+[theme]
+primaryColor = "#2563eb"
