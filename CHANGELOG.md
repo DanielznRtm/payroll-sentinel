@@ -1,11 +1,27 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 (2026-11-15)
+
+The synthetic salaries are now fitted to RAIS 2025 job records. Every synthetic
+detection number went down, and the validator did not change.
 
 - **CBO titles in the default rules.** Titles the keywords miss are looked up in
   the official CBO 2002 titles and synonyms (held-out family accuracy 61.4 % ->
-  63.2 %, no new wrong family; synthetic F1 unchanged at 0.92). `--no-cbo` gives
-  the v1.0 keyword rules.
+  63.2 %, no new wrong family; synthetic F1 within noise: 0.920 both ways on v1.0
+  data, 0.831 -> 0.835 on v1.1 data). `--no-cbo` gives the v1.0 keyword rules.
+- **Generator fitted to RAIS** (`scripts/calibrate_generator.py`, targets in
+  `reports/realism_rais.json`): each family's pay spread fitted in São Paulo (the
+  median spread of log pay inside a peer group went from 0.21 to 0.50), a city
+  index by kind of job (office or industrial) for Campinas and Sorocaba, and the
+  base salary of sales (compared on B2B codes only; retail sellers and sales
+  managers stay in the title lookup) and support (all codes). Interns keep the v1.0
+  spread. Titles and planted errors are unchanged, so the LLM cache and the ground
+  truth stay valid.
+- **Measured effect (seed 42):** F1 0.920 -> 0.835 with rules and 0.963 -> 0.865
+  with LLM titles; level mismatches caught with LLM titles 37 -> 4 of 45; false
+  alarms 0.23 % -> 0.45 %. Factory pay in Campinas and Sorocaba is now within 8 %
+  of RAIS (it was 21-27 % low). The question evaluation does not depend on salaries
+  and is unchanged.
 
 ## v1.0.0 (2026-11-15)
 
