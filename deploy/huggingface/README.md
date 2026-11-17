@@ -3,8 +3,8 @@ title: Payroll Sentinel
 emoji: 🛡️
 colorFrom: blue
 colorTo: indigo
-sdk: docker
-app_port: 8501
+sdk: static
+app_file: index.html
 pinned: false
 license: mit
 short_description: Confere folhas de pagamento antes do benchmark salarial
@@ -16,10 +16,12 @@ Envie a folha de pagamento da sua empresa (CSV ou Excel) e veja, linha a linha, 
 que aceitar, revisar e bloquear antes de ela entrar num benchmark salarial, com o
 motivo, o que fazer e um relatório em Excel.
 
-O arquivo é processado só em memória, durante a sua sessão, e nunca vai para um
-LLM. As verificações não precisam de nome nem CPF: tire essas colunas antes de
-enviar.
+Esta versão roda inteira no seu navegador (Streamlit com [stlite](https://github.com/whitphx/stlite)):
+a folha nunca sai do seu computador e nunca vai para um LLM. Por isso a primeira
+abertura leva cerca de um minuto, o tempo de baixar o Python, e cada validação
+leva de 10 a 30 segundos. Para uma versão mais rápida, rodando num servidor, use
+[payroll-sentinel.streamlit.app](https://payroll-sentinel.streamlit.app).
 
 Código, método e resultados medidos:
 [github.com/DanielznRtm/payroll-sentinel](https://github.com/DanielznRtm/payroll-sentinel).
-Este Space instala um commit fixo desse repositório (veja o `Dockerfile`).
+O `index.html` carrega um commit fixo desse repositório.

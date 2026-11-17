@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Payroll Sentinel</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      // Payroll Sentinel as a static page: stlite runs Streamlit and Python (Pyodide) in the
+      // visitor's browser, so an uploaded payroll never leaves their computer.
+      //
+      // The code is not copied here: every file is fetched from one pinned commit of the
+      // GitHub repository, which stays the only source. To deploy a newer version, change
+      // REF and upload this file again. Add ?local to the URL to load the files from the
+      // same server instead (for testing a checkout before pushing it).
+      import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.js";
+
+      const REF = "48799f50e4f7963492fa194725687f8ea0eb7ec9";
+      const local = new URLSearchParams(location.search).has("local");
+      const base = local ? "/" : `https://raw.githubusercontent.com/DanielznRtm/payroll-sentinel/${REF}/`;
+      const modules = ["__init__", "ask", "cbo_titles", "evaluate", "generate", "llm", "normalize",
+                       "pipeline", "taxonomy", "upload", "validate"];
+
+      const files = {
+        "app.py": { url: base + "app.py" },
+        ".streamlit/config.toml": { url: base + ".streamlit/config.toml" },
+        // app.py turns the public demo mode on when DEMO_MODE is set in Streamlit secrets.
+        ".streamlit/secrets.toml": { data: 'DEMO_MODE = "1"\n' },
+        "reports/evaluation_llm_gemini-3.5-flash-lite.md": {
+          url: base + "reports/evaluation_llm_gemini-3.5-flash-lite.md",
+        },
+      };
+      for (const m of modules) {
+        files[`payroll_sentinel/${m}.py`] = { url: `${base}src/payroll_sentinel/${m}.py` };
+      }
+
+      mount(
+        {
+          requirements: ["pandas", "numpy", "scikit-learn", "requests", "tabulate", "openpyxl"],
+          entrypoint: "app.py",
+          files,
+          streamlitConfig: { "client.toolbarMode": "viewer" },
+        },
+        document.getElementById("root"),
+      );
+    </script>
+  </body>
+</html>
