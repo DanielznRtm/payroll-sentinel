@@ -64,11 +64,14 @@ REFERENCE_PREFIX = "__reference__"
 def reference_peers(seed: int = 42, n_companies: int = 25) -> pd.DataFrame:
     """Synthetic market rows without planted errors, to compare one company's salaries against.
 
-    The salaries follow the generator fitted to RAIS 2025 (taxonomy.py).
+    The salaries follow the generator fitted to RAIS 2025 (taxonomy.py). Their titles are
+    read here, once, with the offline rules (`family`, `level`), so each validation reuses them.
     """
     submitted, truth = generate(seed=seed, n_companies=n_companies)
     ref = submitted.loc[truth["error_type"].eq("none"), REQUIRED_COLUMNS].copy()
     ref["company_id"] = REFERENCE_PREFIX + ref["company_id"]
+    norm = rule_normalize(ref["job_title"])
+    ref["family"], ref["level"] = norm["family"], norm["level"]
     return ref.reset_index(drop=True)
 
 
@@ -80,20 +83,23 @@ def validate_against_reference(df: pd.DataFrame, reference: pd.DataFrame,
     own a file gets almost no peer comparison. The reference rows supply the peers.
     Titles always go through the offline rules, never an LLM; `title_families` lets the
     company name the family of titles the rules do not know (the level still comes from
-    the title).
+    the title). The row rules run on the file only: the reference rows are clean, and
+    the result keeps only the file's rows anyway.
     """
     if "row_id" not in df.columns:
         df = df.copy()
         df.insert(0, "row_id", range(len(df)))
-    ref = reference.copy()
+    ref = reference.drop(columns=["family", "level"])
     ref.insert(0, "row_id", [-1 - i for i in range(len(ref))])  # never clashes with the file's ids
     combined = pd.concat([df, ref], ignore_index=True)
-    norm = normalize_titles(combined["job_title"])
+    own = normalize_titles(df["job_title"]).reset_index(drop=True)
     if title_families:
         chosen = {clean_title(t): fam for t, fam in title_families.items() if fam}
-        fam = combined["job_title"].map(clean_title).map(chosen)
-        norm.loc[fam.notna(), "family"] = fam[fam.notna()]
-    result = validate(combined, norm)
+        fam = df["job_title"].reset_index(drop=True).map(clean_title).map(chosen)
+        own.loc[fam.notna(), "family"] = fam[fam.notna()]
+    norm = pd.concat([own[["family", "level"]], reference[["family", "level"]]], ignore_index=True)
+    in_file = pd.Series(combined.index < len(df), index=combined.index)
+    result = validate(combined, norm, rule_rows=in_file)
     own = set(df["row_id"])
     return ValidationResult(
         issues=result.issues[result.issues["row_id"].isin(own)].reset_index(drop=True),

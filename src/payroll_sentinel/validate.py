@@ -183,12 +183,19 @@ def statistical_checks(df: pd.DataFrame, families: pd.Series, levels: pd.Series,
 
 
 def validate(df: pd.DataFrame, norm: pd.DataFrame, block_share_to_reject: float = 0.05,
-             seed: int = 0) -> ValidationResult:
-    """Run all checks. `norm` has columns family, level, source (index aligned with df)."""
-    issues = rule_checks(df)
+             seed: int = 0, rule_rows: pd.Series | None = None) -> ValidationResult:
+    """Run all checks. `norm` has columns family and level (index aligned with df).
+
+    `rule_rows` (a boolean mask) limits the row rules and the unmapped-title warning to
+    some rows, such as a company file validated together with clean reference peers;
+    every row still counts as a peer in the statistical checks.
+    """
+    in_rules = pd.Series(True, index=df.index) if rule_rows is None else rule_rows
+    issues = rule_checks(df[in_rules])
     work, stat_issues = statistical_checks(df, norm["family"], norm["level"], seed=seed)
     issues += stat_issues
-    for i in df.index[norm["family"].isna() & df["job_title"].fillna("").astype(str).str.strip().ne("")]:
+    titled = df["job_title"].fillna("").astype(str).str.strip().ne("")
+    for i in df.index[norm["family"].isna() & titled & in_rules]:
         issues.append(_issue(df.at[i, "row_id"], df.at[i, "company_id"], df.at[i, "employee_id"],
                              "title_mapping", "unmapped_title", "warn",
                              f"Title '{df.at[i, 'job_title']}' did not map to any job family; "
