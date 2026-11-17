@@ -24,6 +24,10 @@
   browser with stlite, so the payroll never leaves their computer
   (`deploy/huggingface/`). Docker Spaces need a paid plan, so this one is static.
   First load about 80-90 s, sample validation 10 s.
+- **One-click demo link**: `?exemplo` opens the app with the sample payroll
+  validated. The README now opens with that link, real screenshots
+  (`docs/img/`), a summary of what the project demonstrates and a Mermaid
+  architecture diagram.
 
 ## v1.1.0 (2026-11-15)
 
