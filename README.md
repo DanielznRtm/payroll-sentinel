@@ -4,6 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://payroll-sentinel.streamlit.app)
+[![Hugging Face Space](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face%20Space-yellow)](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel)
 
 **Confere folhas de pagamento antes de elas entrarem num benchmark salarial.**
 
@@ -11,6 +12,10 @@
 empresa (CSV ou Excel): você vê, linha a linha, o que aceitar, revisar e bloquear,
 com o motivo e o que fazer, e baixa um relatório em Excel. Não precisa instalar
 nada. O arquivo é processado só em memória e nunca vai para um LLM.
+
+Quer que a folha nem saia do seu computador? A mesma aplicação roda inteira no
+navegador, sem servidor, no **[Hugging Face](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel)**: a primeira abertura leva
+cerca de um minuto e meio, e a validação da folha de exemplo, 10 segundos.
 
 Benchmarks salariais são montados com folhas que dezenas de empresas enviam. Um
 salário anual digitado no campo mensal, um `8.500,00` lido como `8,5` ou um sênior

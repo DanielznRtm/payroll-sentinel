@@ -568,6 +568,19 @@ for files without names or CPF (the required columns need neither). This is how
 the app runs on Streamlit Community Cloud, which installs it from
 `requirements.txt`.
 
+**In the browser, on Hugging Face.** The same `app.py` also runs as a static
+[Hugging Face Space](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel) with [stlite](https://github.com/whitphx/stlite)
+(Streamlit 1.65 on Pyodide, Python compiled to WebAssembly), so an uploaded payroll
+never leaves the visitor's computer. Docker and Gradio Spaces need a paid plan, and
+static Spaces are free. The Space holds two files,
+[`deploy/huggingface/`](../deploy/huggingface/): a README with the Space settings and
+an `index.html` that fetches the app, the package, the Streamlit config and the LLM
+report from one pinned commit of this repository. Demo mode comes from a virtual
+`.streamlit/secrets.toml`. Measured on the live Space: the first load takes about
+80-90 s (Pyodide, pandas and scikit-learn are downloaded), and the sample payroll
+validates in 10 s, against about 1 s on a server. While Python computes, the page
+does not update, because Python and the page share one browser worker.
+
 ### Optional: LLM title normalization (free tiers)
 
 The LLM client talks to any OpenAI-compatible endpoint, so switching provider is

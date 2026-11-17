@@ -17,6 +17,13 @@
   sent to an LLM, capped at 5 MB and 20,000 rows. New `[ui]` dependency: openpyxl.
 - **README in Portuguese and condensed**; the full English write-up moved to
   `docs/technical-report.md`.
+- **Faster validation against reference peers**: row rules and title rules run on
+  the file only, reference titles are read once (one validation 2.0 s -> about 1 s,
+  results unchanged).
+- **Static Hugging Face Space** (https://huggingface.co/spaces/Danielrtm1/payroll-sentinel): the same app runs in the visitor's
+  browser with stlite, so the payroll never leaves their computer
+  (`deploy/huggingface/`). Docker Spaces need a paid plan, so this one is static.
+  First load about 80-90 s, sample validation 10 s.
 
 ## v1.1.0 (2026-11-15)
 

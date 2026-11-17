@@ -65,7 +65,11 @@ user decided the public demo accepts uploads, processed in memory for the sessio
 only (no `st.cache_data` on uploaded data), capped at 5 MB / 20,000 rows. `upload.py`
 reads CSV/Excel in Brazilian formats and maps columns; `validate_against_reference`
 validates one file with the clean synthetic benchmark as peers (seed 7, each company
-alone: errors caught 69.7 % -> 78.9 %). `taxonomy.py` holds the job families, levels, cities, the
+alone: errors caught 69.7 % -> 78.9 %). Two public demos: Streamlit Community Cloud
+(server) and a static Hugging Face Space, Danielrtm1/payroll-sentinel, running the
+same app in the browser with stlite (`deploy/huggingface/`; Docker Spaces need a paid
+plan). Its `index.html` fetches files from a pinned commit (REF): bump REF and
+re-upload index.html to deploy a new version; `?local` tests a checkout. `taxonomy.py` holds the job families, levels, cities, the
 pay parameters fitted to RAIS (`pay_sigma`, city index by kind of job) and the
 2026 minimum wage (R$ 1,621, prorated by weekly hours; internship stipends are
 exempt). `validate.py` has two layers: deterministic rules, then a peer comparison
