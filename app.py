@@ -72,6 +72,8 @@ FIELDS = {"company_id": "Empresa (opcional)", "employee_id": "Matrícula", "job_
           "contract_type": "Tipo de contrato", "weekly_hours": "Horas por semana",
           "monthly_salary": "Salário mensal", "annual_bonus": "Bônus anual (opcional)",
           "hire_date": "Data de admissão"}
+METHODS = {"keyword rules + CBO": "regras (palavras-chave + títulos da CBO)",
+           "keyword rules only": "regras (só palavras-chave)"}
 DETECTORS = {"vote_z": "z-score robusto", "vote_iqr": "Cerca IQR", "vote_iforest": "Isolation Forest",
              "flag_ensemble": "Votação (2 de 3)"}
 NO_COLUMN = "(não tenho)"
@@ -97,6 +99,11 @@ def llm_available() -> bool:
 def num(value) -> str:
     """4.502 (Brazilian thousands separator)."""
     return format(int(value), ",").replace(",", ".")
+
+
+def dec(value: float, digits: int = 3, sign: bool = False) -> str:
+    """0,892 (Brazilian decimal comma); sign=True gives +0,037 for a delta."""
+    return format(value, f"{'+' if sign else ''}.{digits}f").replace(".", ",")
 
 
 def pct(value: float, digits: int = 1) -> str:
@@ -180,7 +187,7 @@ def problems_table(result, data: pd.DataFrame) -> pd.DataFrame:
 
     return pd.DataFrame({
         "Linha": issues["row_id"] + 2,  # +1 for the header, +1 because spreadsheets count from 1
-        "Matrícula": issues["employee_id"], "Cargo": issues["job_title"],
+        "Matrícula": issues["employee_id"], "Cargo": issues["job_title"].fillna("—"),
         "Salário": issues["monthly_salary"].map(brl),
         "Situação": issues["severity"].map(STATUS),
         "Problema": issues["cause"].map(lambda c: CAUSES.get(c, (c, ""))[0]),
@@ -317,7 +324,8 @@ def payroll_tab() -> None:
         st.caption(PRIVACY)
     with right:
         st.markdown("**Sem um arquivo agora?**")
-        if st.button("Usar uma folha de exemplo", key="use_sample"):
+        # ?exemplo in the URL opens the app with the sample loaded: a one-click demo link.
+        if st.button("Usar uma folha de exemplo", key="use_sample") or "exemplo" in st.query_params:
             st.session_state["sample_chosen"] = True
         st.caption("Uma empresa sintética com erros plantados.")
         b = st.columns(2)
@@ -400,13 +408,13 @@ def evaluation_tab(demo: bool) -> None:
 
     s, so = ev.score, ev.oracle_score
     st.success(f"{num(len(ev.submitted))} linhas de {ev.submitted['company_id'].nunique()} empresas, "
-               f"{int((ev.truth['error_type'] != 'none').sum())} erros plantados. Cargos: **{ev.method}**.")
+               f"{int((ev.truth['error_type'] != 'none').sum())} erros plantados. Cargos: **{METHODS.get(ev.method, ev.method)}**.")
     if ev.llm_coverage is not None:
         st.caption(f"Cargos respondidos pelo LLM: {pct(ev.llm_coverage)} (o resto ficou com as regras).")
     m = st.columns(4)
-    m[0].metric("Precisão", s["overall"]["precision"], help="Das linhas apontadas, quantas tinham erro.")
-    m[1].metric("Recall", s["overall"]["recall"], help="Dos erros plantados, quantos foram achados.")
-    m[2].metric("F1", s["overall"]["f1"], help="Média harmônica de precisão e recall.")
+    m[0].metric("Precisão", dec(s["overall"]["precision"]), help="Das linhas apontadas, quantas tinham erro.")
+    m[1].metric("Recall", dec(s["overall"]["recall"]), help="Dos erros plantados, quantos foram achados.")
+    m[2].metric("F1", dec(s["overall"]["f1"]), help="Média harmônica de precisão e recall.")
     m[3].metric("Falsos alarmes", f"{pct(s['false_alarm_rate'], 2)}", help="Linhas limpas apontadas.")
 
     st.markdown("**Erros encontrados por tipo**")
@@ -419,12 +427,18 @@ def evaluation_tab(demo: bool) -> None:
     with left:
         st.markdown("**Detectores da comparação com pares**")
         st.caption(f"Erros estatísticos visíveis: {s['stat_coverage']} (cargo não reconhecido fica sem pares).")
-        st.dataframe(s["detectors"].rename(index=DETECTORS))
+        st.dataframe(s["detectors"].rename(index=DETECTORS, columns={
+            "precision": "Precisão", "recall": "Recall", "f1": "F1", "tp": "Acertos",
+            "fp": "Alarmes falsos", "fn": "Perdidos", "flagged": "Apontados"}))
     with right:
         st.markdown("**Leitura dos cargos**")
-        st.dataframe(ev.titles, hide_index=True)
-        st.metric("Recall com cargos perfeitos", so["overall"]["recall"],
-                  delta=round(so["overall"]["recall"] - s["overall"]["recall"], 3),
+        titles = ev.titles.assign(subset=ev.titles["subset"].replace(
+            {"all": "todos", "common titles": "cargos comuns", "long-tail titles": "cargos raros"}))
+        st.dataframe(titles.rename(columns={
+            "subset": "Cargos", "rows": "Linhas", "family_acc": "Família certa",
+            "level_acc": "Nível certo", "both_acc": "Os dois", "unmapped": "Sem família"}), hide_index=True)
+        st.metric("Recall com cargos perfeitos", dec(so["overall"]["recall"]),
+                  delta=dec(so["overall"]["recall"] - s["overall"]["recall"], sign=True),
                   help="O mesmo validador com os cargos certos: o ganho que falta na leitura dos cargos.")
     st.download_button("Baixar evaluation.md", ev.report(), "evaluation.md", "text/markdown", key="dl_report")
 

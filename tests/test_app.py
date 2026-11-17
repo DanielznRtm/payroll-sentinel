@@ -45,6 +45,16 @@ def test_sample_payroll_goes_through_mapping_validation_and_downloads(app):
     assert mapped["Matrícula"] == "Matrícula" and mapped["Salário mensal"] == "Salário"
 
 
+def test_exemplo_link_opens_the_app_with_the_sample_validated(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    at = AppTest.from_file(str(APP), default_timeout=120)
+    at.query_params["exemplo"] = ""
+    at.run()
+    assert not at.exception
+    assert [m.label for m in at.metric][:4] == ["Linhas", "Aceitas", "Para revisar", "Bloqueadas"]
+
+
 def test_ask_tab_needs_a_key_and_answers_with_the_code(monkeypatch):
     import json
 
@@ -87,4 +97,4 @@ def test_app_runs_evaluation(app):
     assert not app.exception
     labels = [m.label for m in app.metric]
     assert {"Precisão", "Recall", "F1"} <= set(labels)
-    assert float(app.metric[labels.index("Precisão")].value) > 0.80
+    assert float(app.metric[labels.index("Precisão")].value.replace(",", ".")) > 0.80
