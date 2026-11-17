@@ -504,7 +504,7 @@ What this does to detection is in
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python -m payroll_sentinel.cli run                     # generate + validate + evaluate (free, offline)
-pytest                                                 # 103 tests (6 skip without the [ui] extra)
+pytest                                                 # 104 tests (7 skip without the [ui] extra)
 python -m payroll_sentinel.cli validate my_payroll.csv # your own file (same columns as data/submissions.csv)
 python -m payroll_sentinel.cli eval-titles eval/heldout_titles.csv  # [--llm | --no-cbo] titles not in taxonomy.py
 python -m payroll_sentinel.cli run --no-cbo            # keyword rules only, without the CBO titles (v1.0)
@@ -548,6 +548,9 @@ and opens the browser. The UI is in Portuguese, for Brazilian companies:
   and the two CSV files to send back.
 * **Como medimos** (how it is measured): the evaluation on synthetic data, with the
   same metrics as `reports/evaluation.md`.
+
+Adding `?exemplo` to the URL opens the app with the sample payroll already validated,
+a one-click demo link (https://payroll-sentinel.streamlit.app/?exemplo).
 * **Resultados com LLM**: the saved LLM report.
 * **Perguntar ao benchmark**: questions in Portuguese or English, answered as above
   (needs an LLM key).

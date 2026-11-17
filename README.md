@@ -6,26 +6,57 @@
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://payroll-sentinel.streamlit.app)
 [![Hugging Face Space](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face%20Space-yellow)](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel)
 
-**Confere folhas de pagamento antes de elas entrarem num benchmark salarial.**
+**Confere folhas de pagamento antes de elas entrarem num benchmark salarial: aponta,
+linha a linha, o que aceitar, revisar e bloquear, com o motivo e o que fazer.**
 
-**[Abra o site](https://payroll-sentinel.streamlit.app)** e envie a folha da sua
-empresa (CSV ou Excel): você vê, linha a linha, o que aceitar, revisar e bloquear,
-com o motivo e o que fazer, e baixa um relatório em Excel. Não precisa instalar
-nada. O arquivo é processado só em memória e nunca vai para um LLM.
+**▶ [Ver o resultado de uma folha de exemplo](https://payroll-sentinel.streamlit.app/?exemplo)**
+(um clique, sem instalar nada) · [Rodar inteiro no navegador](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel)
+· English: [technical report](docs/technical-report.md)
 
-Quer que a folha nem saia do seu computador? A mesma aplicação roda inteira no
-navegador, sem servidor, no **[Hugging Face](https://huggingface.co/spaces/Danielrtm1/payroll-sentinel)**: a primeira abertura leva
-cerca de um minuto e meio, e a validação da folha de exemplo, 10 segundos.
+![Resultado da validação de uma folha de exemplo: decisão, contagens e problemas por tipo](docs/img/resultado.png)
 
 Benchmarks salariais são montados com folhas que dezenas de empresas enviam. Um
 salário anual digitado no campo mensal, um `8.500,00` lido como `8,5` ou um sênior
 pago como estagiário já distorcem a mediana do mercado para todos. Alguns erros
 aparecem numa linha só; outros, só comparando o salário com o de todos os pares.
+Cada número deste projeto foi **medido**: em dados sintéticos com erros plantados e
+rotulados, em cargos e perguntas reais escritos à mão e em bases públicas e oficiais.
 
-Cada número abaixo foi **medido**: em dados sintéticos com erros plantados e
-rotulados, em cargos e perguntas reais escritos à mão e em três bases públicas.
+## O que este projeto demonstra
 
-<!-- demo GIF goes here (docs/demo.gif) once it is recorded -->
+* **LLM com guarda-corpos.** Um LLM (Gemini, plano gratuito, por uma API compatível
+  com a da OpenAI) lê cargos escritos de qualquer jeito. Os títulos vão em lotes, com
+  cache por modelo, respeito ao limite de requisições e validação de cada resposta. O
+  LLM nunca produz um número mostrado ao usuário.
+* **Avaliação antes de opinião.** Há um gabarito com erros plantados, 130 cargos
+  reais rotulados à mão e separados do desenvolvimento, e uma comparação de três
+  modelos em acurácia, latência e custo. Uma ablação com cargos perfeitos mostra onde
+  está o limite.
+* **Pergunta em linguagem natural, executada com segurança.** O LLM só preenche uma
+  consulta JSON de formato fixo; o código confere cada campo numa lista permitida e
+  calcula a resposta. Resultado: 27 de 30 perguntas certas e 5 de 5 fora do escopo
+  recusadas.
+* **Detecção de anomalias explicável.** Regras do direito trabalhista brasileiro mais
+  três detectores que votam (z-score robusto, IQR e Isolation Forest), com a causa
+  provável de cada alerta.
+* **Dados reais.** O validador foi rodado em três bases públicas. O gerador sintético
+  foi calibrado com 25,5 milhões de linhas da RAIS 2025, lidas em streaming de um
+  `.7z`. Uma pesquisa salarial (State of Data) serve de checagem independente.
+* **Produto de ponta a ponta.** São dois sites gratuitos: um no servidor e outro que
+  roda Python no navegador (WebAssembly), em que a folha nunca sai do computador. Há
+  privacidade desde o desenho (LGPD), 104 testes automatizados e CI no GitHub Actions.
+
+**Stack:** Python · pandas · scikit-learn · Streamlit · stlite/Pyodide · Gemini e
+Groq (API compatível com a da OpenAI) · pytest · GitHub Actions.
+
+<details>
+<summary>Mais telas</summary>
+
+![Envio da folha, colunas reconhecidas e decisão](docs/img/inicio.png)
+
+![Aba "Como medimos": precisão, recall e erros encontrados por tipo de erro plantado](docs/img/como-medimos.png)
+
+</details>
 
 ## Um exemplo
 
@@ -70,11 +101,14 @@ número: [relatório técnico](docs/technical-report.md) (em inglês).
 
 ## Como funciona
 
-```
- folha ──► leitura dos cargos ──► regras ──► comparação com pares ──► relatório
-           (palavras-chave + CBO,   (campos,    (mesma família e nível;
-            ou LLM)                  datas,      z-score robusto, IQR e
-                                     mínimo)     Isolation Forest votam)
+```mermaid
+flowchart LR
+    A["Folha da empresa<br/>CSV ou Excel"] --> B["Leitura dos cargos<br/>regras + CBO, ou LLM"]
+    B --> C["Regras por linha<br/>campos, datas, mínimo, duplicatas"]
+    B --> D["Comparação com pares<br/>mesmo cargo e nível"]
+    D --> E{"Votação 2 de 3<br/>z-score · IQR · Isolation Forest"}
+    C --> F["Relatório<br/>aceitar · revisar · bloquear"]
+    E --> F
 ```
 
 * **Regras** pegam erros de uma linha só: campos vazios, matrículas e linhas
@@ -97,7 +131,7 @@ número: [relatório técnico](docs/technical-report.md) (em inglês).
 |---|---|
 | **v1.0** | Módulo A completo: validador, cargos por LLM, 130 cargos reais escritos à mão, comparação de modelos, perguntas em linguagem natural, demo público e estudo em bases públicas. F1 0,92 com regras e 0,963 com LLM, num mundo de salários pouco espalhados. |
 | **v1.1** | Títulos oficiais da CBO nas regras; gerador calibrado com a RAIS (dispersão por família, índice de cidade para escritório e fábrica, vendas B2B). O validador é o mesmo, mas os dados ficaram realistas: F1 0,835 com regras e 0,865 com LLM. Os números da v1.1 são os que valem. |
-| **próxima** | Site em português para a empresa enviar a folha (CSV ou Excel), com comparação contra um mercado de referência. |
+| **próxima** | Site em português para a empresa enviar a folha (CSV ou Excel), com comparação contra um mercado de referência, em dois sites gratuitos: no servidor e no navegador. |
 
 Detalhes em [CHANGELOG.md](CHANGELOG.md).
 
@@ -126,7 +160,7 @@ pip install -e ".[dev,ui]"
 streamlit run app.py --server.address localhost       # o site, em http://localhost:8501
 python -m payroll_sentinel.cli run                     # avaliação completa em dados sintéticos
 python -m payroll_sentinel.cli validate folha.csv      # pelo terminal, com as colunas de data/submissions.csv
-pytest                                                 # 103 testes
+pytest                                                 # 104 testes
 ```
 
 No Windows, basta dar dois cliques em `run_ui.bat`. O LLM é opcional e gratuito
