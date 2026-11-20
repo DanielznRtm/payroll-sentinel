@@ -34,6 +34,16 @@
   `src/salary_core/params/2026.json`, with an official source for every block.
   43 tests: the five Receita Federal worked examples for Lei 15.270/2025 pass as
   published; reference case R$ 6,000 CLT -> INSS R$ 641.51, IRRF R$ 385.10.
+- **Labor-claim triage.** `triage FILE [--llm]` reads a petition, finds what it
+  asks for and prices seven claims with `salary_core/labor.py` (notice, 13th,
+  vacation, overtime, unpaid FGTS, 40 % FGTS fine, CLT art. 477 fine), applying
+  limitation periods and the rules for each way a contract ends. The extractor,
+  rules or LLM, only fills a fixed JSON; any date, number or quote not written in
+  the petition is dropped. On 60 synthetic petitions the priced total matches the
+  truth in 48/60 with keyword rules and 59/60 with `gemini-3.5-flash-lite`
+  (`reports/claims_synthetic_*.md`). Hand-written petitions for the real test go
+  in `eval/heldout_petitions/`. Overtime after 2026-10-15 is left to a person
+  because EC 141/2026 changed weekly hours and rest days.
 
 ## v1.1.0 (2026-11-15)
 

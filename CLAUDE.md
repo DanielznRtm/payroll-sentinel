@@ -143,6 +143,32 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
    - `pj_net` assumes a steady state (same revenue and pro-labore for 12 months,
      pro-labore is the whole payroll) and raises instead of computing when monthly
      profit passes R$ 50,000 (Lei 15.270 10 % withholding, disputed for the Simples).
-     Not modeled yet: 13th salary, vacation, FGTS, employer cost, alimony.
-   - Next: the LLM extracts claims from synthetic petitions; the code computes amounts.
+     Not modeled in net pay: employer cost, alimony.
+   - Claim triage (2026-11-20, plan approved by the user): `salary_core/labor.py`
+     prices 7 claims from the `labor_rights` block (paid notice and its projection,
+     13th, vacation + 1/3, overtime with divisor 5 x weekly hours, unpaid FGTS, 40 %
+     FGTS fine estimate as a lower bound, CLT art. 477 fine; a month counts with
+     15+ days). `claims.py` holds the fixed extraction JSON and drops any date or
+     number not written in the petition and any quote not copied from it, so an
+     extractor cannot invent a salary. `triage.py` decides what is owed by
+     termination type (resignation: no notice or 40 % fine; just cause or unknown:
+     human review), applies limitation (2 years after the end, 5 years back,
+     `labor_procedure` block) and the likely procedure (40 minimum wages). Claims the
+     code does not price (danos morais...) are shown without a value.
+     `petitions.py` generates template petitions with trap sentences; `claims_eval.py`
+     scores claims, facts (right, missing, wrong) and the priced total. Commands:
+     `triage FILE [--llm]`, `eval-claims [--llm] [--heldout DIR]`; LLM answers are
+     cached per model in `data/llm_claims_cache_<provider>_<model>.json`.
+   - EC 141/2026 (DOU 2026-10-16) cut weekly hours to 42 from 2026-12-16 and 40 from
+     2027-12-16, added a second weekly rest day and exempted graduates earning at
+     least 2.5x the INSS ceiling; overtime after 2026-10-15 goes to human review.
+     Module A still prorates the minimum wage by 44 h (right for its 2026-10-31
+     reference date, not for uploads after 2026-12-16).
+   - Measured on 60 synthetic petitions (seed 7): priced total right in 48/60 with
+     rules (claim precision 87.6 %, every trap sentence) and 59/60 with
+     `gemini-3.5-flash-lite` (precision 100 %, recall 98.2 %, no fact wrong; both
+     errors left a value missing). Template text is easy: the real test is the
+     user's hand-written set in `eval/heldout_petitions/` (README there). Never write
+     or suggest those petitions; commit their truth.json before the first run; never
+     tune the prompt on their errors.
 3. **Module C** is specified privately. Do not add it to this repo until I decide.
