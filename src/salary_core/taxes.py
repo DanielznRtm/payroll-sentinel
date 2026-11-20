@@ -42,6 +42,20 @@ def inss_employee(gross, params: dict) -> Decimal:
     return cents(total)
 
 
+def inss_pro_labore(pro_labore, params: dict) -> Decimal:
+    """A partner's pro-labore: a flat rate withheld by the company, up to the INSS ceiling."""
+    ceiling = params["inss_employee"]["bands"][-1]["up_to"]
+    return cents(min(money(pro_labore), ceiling) * params["inss_contribuinte_individual"]["rate"])
+
+
+def simples_effective_rate(revenue_12m: Decimal, annex: list[dict]) -> Decimal:
+    """Simples Nacional: (12-month revenue x nominal rate - deduction) / 12-month revenue."""
+    for band in annex:
+        if revenue_12m <= band["up_to"]:
+            return (revenue_12m * band["rate"] - band["deduction"]) / revenue_12m
+    raise ValueError("12-month revenue above the Simples Nacional limit")
+
+
 @dataclass(frozen=True)
 class IncomeTax:
     """One month of IRRF, step by step, so a result can be explained and checked."""
