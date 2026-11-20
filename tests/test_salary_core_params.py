@@ -24,7 +24,7 @@ def test_2026_params_load_as_exact_decimals():
 def test_every_block_cites_an_official_https_source():
     p = load_params(2026)
     blocks = {k: v for k, v in p.items() if k != "year"}
-    assert len(blocks) == 9
+    assert len(blocks) == 10
     for name, block in blocks.items():
         assert block["source"], name
         for url in block["source"]:

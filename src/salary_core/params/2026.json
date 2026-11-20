@@ -113,6 +113,16 @@
       "https://www.planalto.gov.br/ccivil_03/constituicao/emendas/emc/emc141.htm"
     ]
   },
+  "labor_procedure": {
+    "note": "Limitation (CF art. 7, XXIX): a labor claim covers credits of the last 5 years before filing and must be filed within 2 years after the contract ends. Claims worth up to 40 minimum wages at filing follow the summary procedure (CLT art. 852-A).",
+    "limitation_years_back": 5,
+    "limitation_years_after_end": 2,
+    "summary_procedure_max_minimum_wages": 40,
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
+      "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm"
+    ]
+  },
   "internship": {
     "note": "Internship stipend (Lei 11.788/2008): no mandatory INSS (art. 12 lets the intern join as a voluntary contributor) and no FGTS. The stipend pays income tax as income from work: the scholarship exemption of Lei 9.250/1995, art. 26, requires that no service is given in return.",
     "source": [
