@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
-from .taxonomy import FULL_TIME_HOURS, LEVEL_ORDINAL, REFERENCE_DATE, legal_min_wage
+from .taxonomy import LEVEL_ORDINAL, REFERENCE_DATE, full_time_hours, legal_min_wage
 
 DECIMAL_SHIFT_CEILING = 300.0   # a monthly salary below this is a typo, not a wage
 BONUS_RATIO_LIMIT = 1.5         # annual bonus > 1.5x annual base salary
@@ -93,8 +93,8 @@ def rule_checks(df: pd.DataFrame) -> list[dict]:
                 issues.append(_issue(*base, "salary_range", "decimal_shift", "block",
                                      f"Salary R$ {s:,.2f} looks like a decimal separator error "
                                      f"(e.g. 8.500,00 read as 8,5)."))
-            elif r["contract_type"] == "CLT" and s < legal_min_wage(r["weekly_hours"]):
-                floor = legal_min_wage(r["weekly_hours"])
+            elif r["contract_type"] == "CLT" and s < legal_min_wage(r["weekly_hours"], REFERENCE_DATE):
+                floor = legal_min_wage(r["weekly_hours"], REFERENCE_DATE)
                 issues.append(_issue(*base, "min_wage", "below_min_wage", "block",
                                      f"R$ {s:,.2f} is below the legal minimum of R$ {floor:,.2f} "
                                      f"for {r['weekly_hours']}h/week."))
@@ -124,9 +124,14 @@ def _diagnose(ratio: float) -> tuple[str, str]:
 
 
 def full_time_equivalent(salary: pd.Series, weekly_hours: pd.Series) -> pd.Series:
-    """Scale part-time salaries to 44 h/week (40 h and 44 h both count as full time)."""
-    hours = pd.to_numeric(weekly_hours, errors="coerce").fillna(FULL_TIME_HOURS)
-    return salary * np.where(hours < 36, FULL_TIME_HOURS / hours.clip(lower=1), 1.0)
+    """Scale part-time salaries (under 36 h) to the full week of the reference date.
+
+    That week is 44 h on the 2026-10-31 cut-off (42 h from 2026-12-16, EC 141/2026);
+    contracts of 36 h or more already count as full time.
+    """
+    full = full_time_hours(REFERENCE_DATE)
+    hours = pd.to_numeric(weekly_hours, errors="coerce").fillna(full)
+    return salary * np.where(hours < 36, full / hours.clip(lower=1), 1.0)
 
 
 def statistical_checks(df: pd.DataFrame, families: pd.Series, levels: pd.Series,

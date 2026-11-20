@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import re
 
@@ -9,7 +10,7 @@ from payroll_sentinel.generate import generate
 from payroll_sentinel.llm import LLMClient, LLMOutputError, LLMRequestError, LLMStats
 from payroll_sentinel.normalize import clean_title, llm_normalize, parse_llm_batch, rule_normalize
 from payroll_sentinel.pipeline import missing_columns, run_evaluation, validate_submissions
-from payroll_sentinel.taxonomy import legal_min_wage
+from payroll_sentinel.taxonomy import full_time_hours, legal_min_wage
 from payroll_sentinel.validate import _diagnose, rule_checks, validate
 
 
@@ -71,6 +72,38 @@ def test_min_wage_is_proportional_to_hours():
     # 30h part-time paid R$ 1.300 is legal (proportional minimum ~ R$ 1.105)
     assert causes([_row(weekly_hours=30, monthly_salary=1300.0)]) == set()
     assert causes([_row(monthly_salary=1300.0)]) == {"below_min_wage"}
+
+
+def test_full_week_follows_ec_141():
+    """EC 141/2026, art. 6: 42 h two months after the 2026-10-16 publication."""
+    assert full_time_hours(dt.date(2026, 10, 31)) == 44     # the benchmark cut-off
+    assert full_time_hours(dt.date(2026, 12, 15)) == 44
+    assert full_time_hours(dt.date(2026, 12, 16)) == 42
+
+
+def test_min_wage_proportion_uses_the_full_week_of_the_date():
+    before, after = dt.date(2026, 12, 15), dt.date(2026, 12, 16)
+    # 42 h was a reduced week (1,621 x 42 / 44 = 1,547.32); from 2026-12-16 it is the full week
+    assert legal_min_wage(42, before) == pytest.approx(1547.32, abs=0.005)
+    assert legal_min_wage(42, after) == pytest.approx(1621.00)
+    # 40 h: 1,621 x 40 / 44 = 1,473.64, then 1,621 x 40 / 42 = 1,543.81
+    assert legal_min_wage(40, before) == pytest.approx(1473.64, abs=0.005)
+    assert legal_min_wage(40, after) == pytest.approx(1543.81, abs=0.005)
+    # more hours than the full week still get the whole minimum, not more
+    assert legal_min_wage(44, after) == pytest.approx(1621.00)
+
+
+def test_42h_contract_is_full_time_after_ec_141(monkeypatch):
+    row = _row(weekly_hours=42, monthly_salary=1600.0)
+    assert causes([row]) == set()                       # 2026-10-31 cut-off: floor 1,547.32
+    monkeypatch.setattr("payroll_sentinel.validate.REFERENCE_DATE", dt.date(2026, 12, 16))
+    assert causes([row]) == {"below_min_wage"}          # floor 1,621.00
+
+
+def test_min_wage_of_a_year_without_parameters_is_refused():
+    # 2025 had another minimum wage (and so will 2027): never reuse the 2026 one
+    with pytest.raises(ValueError, match="no tax parameters for 2025"):
+        legal_min_wage(44, dt.date(2025, 12, 31))
 
 
 def test_intern_stipend_is_not_bound_by_min_wage():

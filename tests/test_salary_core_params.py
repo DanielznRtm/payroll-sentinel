@@ -24,12 +24,13 @@ def test_2026_params_load_as_exact_decimals():
 def test_every_block_cites_an_official_https_source():
     p = load_params(2026)
     blocks = {k: v for k, v in p.items() if k != "year"}
-    assert len(blocks) == 10
+    assert len(blocks) == 11
     for name, block in blocks.items():
         assert block["source"], name
         for url in block["source"]:
             host = url.split("/")[2]
-            assert url.startswith("https://") and host.endswith(".gov.br"), (name, url)
+            # .gov.br: government (laws on Planalto, Receita); .jus.br: courts (TST case law)
+            assert url.startswith("https://") and host.endswith((".gov.br", ".jus.br")), (name, url)
 
 
 def test_unknown_year_is_refused():

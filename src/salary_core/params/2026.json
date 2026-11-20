@@ -7,6 +7,18 @@
       "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/decreto/d12797.htm"
     ]
   },
+  "normal_weekly_hours": {
+    "note": "Most normal hours in a week (CF art. 7, XIII). The minimum wage pays this full week; a contract of fewer hours may be paid the minimum in proportion to them (TST OJ 358 of SDI-1: hours below the constitutional limit). EC 141/2026 (DOU 2026-10-16), art. 6, lowers the week to 42 h two months after publication and to 40 h one year later (2027-12-16, for the 2027 file); art. 2 forbids any salary cut, minimum wages included, and art. 4 keeps contracts of 40 h or less as they are. Each step holds from its date on. Decreto 12.797/2025 still states an hourly minimum of R$ 7.37 (1,621 / 220); from 2026-12-16 the proportion here uses the 42 h week, a reading the courts have not settled yet.",
+    "steps": [
+      {"from": "2026-01-01", "hours": 44},
+      {"from": "2026-12-16", "hours": 42}
+    ],
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
+      "https://www.planalto.gov.br/ccivil_03/constituicao/emendas/emc/emc141.htm",
+      "https://www.tst.jus.br/-/pode-ou-nao-pode-receber-salario-minimo-proporcional-a-jornada-reduzida-de-trabalho-"
+    ]
+  },
   "inss_employee": {
     "note": "CLT employee contribution from January 2026 (Portaria Interministerial MPS/MF 13/2026, art. 7 and Annex II; ceiling in art. 2). Each rate applies only to the part of the salary inside its band; the last limit is the ceiling. The exact sum is rounded once, as in the Receita Federal worked examples.",
     "bands": [

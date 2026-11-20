@@ -23,6 +23,9 @@
       const base = local ? "/" : `https://raw.githubusercontent.com/DanielznRtm/payroll-sentinel/${REF}/`;
       const modules = ["__init__", "ask", "cbo_titles", "evaluate", "generate", "llm", "normalize",
                        "pipeline", "taxonomy", "upload", "validate"];
+      // taxonomy.py reads the minimum wage and the full week from salary_core's parameters.
+      const coreModules = ["__init__", "labor", "net_pay", "parameters", "taxes"];
+      const coreParams = ["2026"];
 
       const files = {
         "app.py": { url: base + "app.py" },
@@ -35,6 +38,12 @@
       };
       for (const m of modules) {
         files[`payroll_sentinel/${m}.py`] = { url: `${base}src/payroll_sentinel/${m}.py` };
+      }
+      for (const m of coreModules) {
+        files[`salary_core/${m}.py`] = { url: `${base}src/salary_core/${m}.py` };
+      }
+      for (const y of coreParams) {
+        files[`salary_core/params/${y}.json`] = { url: `${base}src/salary_core/params/${y}.json` };
       }
 
       mount(

@@ -7,11 +7,13 @@ dataset. They are NOT market data.
 from __future__ import annotations
 
 import datetime as dt
+from functools import lru_cache
+
+from salary_core import load_params
 
 # --- Legal constants -------------------------------------------------------
-# National minimum wage for 2026 (Decreto 12.797/2025), for a 44h/week contract.
-MIN_WAGE = 1621.00
-FULL_TIME_HOURS = 44
+# The minimum wage and the full normal week come from salary_core/params/<year>.json,
+# with their sources (see legal_min_wage at the end of this file).
 
 # Date the submissions refer to (e.g. the benchmark collection cut-off).
 REFERENCE_DATE = dt.date(2026, 10, 31)
@@ -138,7 +140,28 @@ def city_index(city: str, family: str) -> float:
     return CITIES[city][FAMILIES[family]["kind"]]
 
 
-def legal_min_wage(weekly_hours: float) -> float:
-    """Minimum monthly wage proportional to the contracted weekly hours."""
-    hours = min(float(weekly_hours), FULL_TIME_HOURS)
-    return MIN_WAGE * hours / FULL_TIME_HOURS
+@lru_cache(maxsize=None)
+def _legal_params(year: int) -> dict:
+    """Parameters of one year, read once. A year without a file raises instead of guessing."""
+    return load_params(year)
+
+
+def full_time_hours(on: dt.date = REFERENCE_DATE) -> int:
+    """Most normal weekly hours on a date: 44 h, then 42 h from 2026-12-16 (EC 141/2026)."""
+    steps = _legal_params(on.year)["normal_weekly_hours"]["steps"]
+    started = [s for s in steps if dt.date.fromisoformat(s["from"]) <= on]
+    if not started:
+        raise ValueError(f"no normal week for {on}")
+    return int(max(started, key=lambda s: s["from"])["hours"])
+
+
+def legal_min_wage(weekly_hours: float, on: dt.date = REFERENCE_DATE) -> float:
+    """Minimum monthly wage for a contract of ``weekly_hours`` on a date.
+
+    The national minimum pays the full normal week; fewer hours may be paid in
+    proportion (TST OJ 358). More hours than the full week never lower it, and
+    since EC 141/2026 shortens that week, the proportion depends on the date.
+    """
+    full = full_time_hours(on)
+    monthly = float(_legal_params(on.year)["minimum_wage"]["monthly"])
+    return monthly * min(float(weekly_hours), full) / full
