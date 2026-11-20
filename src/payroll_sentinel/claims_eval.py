@@ -10,13 +10,15 @@ For every petition the extraction is compared with the truth on three levels:
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Callable
 
-from .claims import CLAIM_TYPES, Claim, Extraction
+from .claims import CLAIM_TYPES, TERMINATION_TYPES, TOP_KEYS, Claim, Extraction, dates_in_text, numbers_in_text
 from .petitions import Petition
 from .triage import triage
 
@@ -156,3 +158,74 @@ def evaluate_claims(petitions: list[Petition], extract: Callable[[str], Extracti
         ev.add(p.id, p.truth, extract(p.text), params)
     ev.seconds = time.monotonic() - start
     return ev
+
+
+# --- Hand-written petitions -------------------------------------------------------
+
+class HeldoutError(ValueError):
+    """The hand-written petitions or their truth.json are not ready to be scored."""
+
+
+def check_truth(name: str, truth: dict, text: str) -> list[str]:
+    """Problems that would make the truth unfair: values the checks could never accept, unknown types."""
+    problems = []
+    if not isinstance(truth, dict) or set(truth) != TOP_KEYS:
+        return [f"{name}: truth must have exactly the keys {sorted(TOP_KEYS)}"]
+    if truth["termination_type"] not in TERMINATION_TYPES:
+        problems.append(f"{name}: termination_type must be one of {list(TERMINATION_TYPES)}")
+    days, numbers = dates_in_text(text), numbers_in_text(text)
+    for key in ("admission_date", "termination_date", "filing_date"):
+        value = truth[key]
+        if value is None:
+            continue
+        try:
+            day = date.fromisoformat(value)
+        except (TypeError, ValueError):
+            problems.append(f"{name}: {key} must be YYYY-MM-DD or null")
+            continue
+        if day not in days:
+            problems.append(f"{name}: {key} {value} is not written as a date in the petition (like 15/03/2021 or "
+                            "15 de março de 2021); the checks would drop it, so the right answer is null")
+    values = [("monthly_salary", truth["monthly_salary"]), ("weekly_hours", truth["weekly_hours"])]
+    for c in truth["claims"] if isinstance(truth["claims"], list) else []:
+        if not isinstance(c, dict) or c.get("type") not in CLAIM_TYPES:
+            problems.append(f"{name}: unknown claim {c!r}")
+            continue
+        if set(c) - {"type", "hours_per_month", "months", "label"}:
+            problems.append(f"{name}: claim {c['type']} has unknown keys")
+        values += [(f"{c['type']} {k}", c[k]) for k in ("hours_per_month", "months") if k in c]
+    for where, value in values:
+        if value is None:
+            continue
+        try:
+            written = Decimal(str(value)) in numbers
+        except ArithmeticError:
+            written = False
+        if not written:
+            problems.append(f"{name}: {where} {value} is not written in digits in the petition; the checks would "
+                            "drop it, so the right answer is null")
+    return problems
+
+
+def load_heldout_petitions(folder: str | Path) -> list[Petition]:
+    """Petitions written by hand (*.txt) and their expected extraction (truth.json, keyed by file name)."""
+    folder = Path(folder)
+    texts = sorted(folder.glob("*.txt"))
+    if not texts:
+        raise HeldoutError(f"no petitions (*.txt) in {folder} yet")
+    truth_file = folder / "truth.json"
+    if not truth_file.exists():
+        raise HeldoutError(f"{truth_file} is missing")
+    truth = json.loads(truth_file.read_text(encoding="utf-8"))
+    names = {p.name for p in texts}
+    problems = [f"{n}: no entry in truth.json" for n in sorted(names - set(truth))]
+    problems += [f"truth.json: {n} has no petition file" for n in sorted(set(truth) - names)]
+    petitions = []
+    for path in texts:
+        text = path.read_text(encoding="utf-8")
+        if path.name in truth:
+            problems += check_truth(path.name, truth[path.name], text)
+            petitions.append(Petition(path.stem, text, truth[path.name]))
+    if problems:
+        raise HeldoutError("\n".join(problems))
+    return petitions

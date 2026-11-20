@@ -8,7 +8,7 @@
     python -m payroll_sentinel.cli ask "QUESTION"  # question about the benchmark (needs an LLM)
     python -m payroll_sentinel.cli eval-ask FILE   # score ask on eval/questions.csv (needs an LLM)
     python -m payroll_sentinel.cli triage FILE [--llm]  # claims of a petition (.txt) and what they are worth
-    python -m payroll_sentinel.cli eval-claims [--llm]  # score claim extraction on synthetic petitions
+    python -m payroll_sentinel.cli eval-claims [--llm] [--heldout DIR]  # score claim extraction
 """
 
 from __future__ import annotations
@@ -149,17 +149,24 @@ def cmd_triage(args) -> None:
 
 def cmd_eval_claims(args) -> None:
     from salary_core import load_params
-    from .claims_eval import evaluate_claims
+    from .claims_eval import HeldoutError, evaluate_claims, load_heldout_petitions
     from .petitions import generate_petitions
+    if args.heldout:
+        try:
+            petitions = load_heldout_petitions(args.heldout)
+        except HeldoutError as exc:
+            raise SystemExit(f"{args.heldout} is not ready:\n{exc}")
+        kind, source = "heldout", f"written by hand, {Path(args.heldout).as_posix()}"
+    else:
+        petitions = generate_petitions(args.n, seed=args.seed)
+        kind, source = "synthetic", f"synthetic, seed {args.seed}; template text, easier than real petitions"
     slug, method, extract, client = _claim_extractor(args)
-    petitions = generate_petitions(args.n, seed=args.seed)
-    ev = evaluate_claims(petitions, extract, load_params(2026), method,
-                         f"synthetic, seed {args.seed}; template text, easier than real petitions")
+    ev = evaluate_claims(petitions, extract, load_params(2026), method, source)
     if client is not None:
         ev.llm_stats = client.stats.summary()
     out = Path(args.reports)
     out.mkdir(parents=True, exist_ok=True)
-    path = out / f"claims_synthetic_{slug}.md"
+    path = out / f"claims_{kind}_{slug}.md"
     text = ev.report()
     path.write_text(text, encoding="utf-8")
     print(text[:3000])
@@ -208,7 +215,8 @@ def main() -> None:
     tr.add_argument("--no-cache", action="store_true", help="ask the LLM again")
     tr.add_argument("--data", default="data")
     tr.set_defaults(func=cmd_triage)
-    ec = sub.add_parser("eval-claims", help="score claim extraction on synthetic petitions")
+    ec = sub.add_parser("eval-claims", help="score claim extraction on synthetic or hand-written petitions")
+    ec.add_argument("--heldout", help="folder of hand-written petitions (*.txt) with truth.json")
     ec.add_argument("--llm", action="store_true", help="extract the claims with an LLM")
     ec.add_argument("--no-cache", action="store_true", help="ask the LLM for every petition (use it to time a model)")
     ec.add_argument("--n", type=int, default=60)

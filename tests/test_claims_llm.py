@@ -3,9 +3,11 @@
 import json
 import sys
 
+import pytest
+
 from payroll_sentinel import cli
 from payroll_sentinel.claims import MAX_PETITION_CHARS, llm_extract, parse_extraction, rule_extract
-from payroll_sentinel.claims_eval import evaluate_claims, extraction_from_truth
+from payroll_sentinel.claims_eval import HeldoutError, evaluate_claims, extraction_from_truth, load_heldout_petitions
 from payroll_sentinel.llm import LLMOutputError, LLMStats
 from payroll_sentinel.petitions import generate_petitions
 from salary_core import load_params
@@ -77,3 +79,49 @@ def test_triage_command_prints_the_priced_claims(tmp_path, monkeypatch, capsys):
     assert "overtime: R$ 43,363.64" in out             # 20 h x 53 months, divisor 220 (test_salary_core_labor)
     assert "other (danos morais): not priced" in out
     assert "Priced total: R$ " in out
+
+
+# --- Hand-written petitions: the loader refuses an unfair truth.json --------------
+
+MINI_TRUTH = {"admission_date": "2021-03-15", "termination_date": "2025-08-10", "termination_type": "without_cause",
+              "monthly_salary": "6000.00", "weekly_hours": "44", "filing_date": "2026-02-03",
+              "claims": [{"type": "overtime", "hours_per_month": "20"}, {"type": "other", "label": "danos morais"}]}
+
+
+def _folder(tmp_path, truth):
+    (tmp_path / "H01.txt").write_text(MINI, encoding="utf-8")
+    (tmp_path / "truth.json").write_text(json.dumps(truth, ensure_ascii=False), encoding="utf-8")
+    return tmp_path
+
+
+def test_heldout_petitions_load_with_their_truth(tmp_path):
+    petitions = load_heldout_petitions(_folder(tmp_path, {"H01.txt": MINI_TRUTH}))
+    assert [(p.id, p.truth) for p in petitions] == [("H01", MINI_TRUTH)]
+
+
+@pytest.mark.parametrize("truth,message", [
+    ({}, "H01.txt: no entry in truth.json"),
+    ({"H01.txt": MINI_TRUTH, "H02.txt": MINI_TRUTH}, "H02.txt has no petition file"),
+    ({"H01.txt": {**MINI_TRUTH, "monthly_salary": "6500.00"}}, "monthly_salary 6500.00 is not written in digits"),
+    ({"H01.txt": {**MINI_TRUTH, "filing_date": "2026-02-04"}}, "filing_date 2026-02-04 is not written as a date"),
+    ({"H01.txt": {**MINI_TRUTH, "claims": [{"type": "hazard_pay"}]}}, "unknown claim"),
+])
+def test_an_unfair_truth_is_refused_before_any_run(tmp_path, truth, message):
+    with pytest.raises(HeldoutError, match=message):
+        load_heldout_petitions(_folder(tmp_path, truth))
+
+
+def test_an_empty_folder_is_not_ready(tmp_path):
+    with pytest.raises(HeldoutError, match="no petitions"):
+        load_heldout_petitions(tmp_path)
+
+
+def test_eval_claims_on_a_heldout_folder_writes_its_report(tmp_path, monkeypatch, capsys):
+    (tmp_path / "heldout").mkdir()
+    folder = _folder(tmp_path / "heldout", {"H01.txt": MINI_TRUTH})
+    monkeypatch.setattr(sys, "argv", ["payroll_sentinel", "eval-claims", "--heldout", str(folder),
+                                      "--reports", str(tmp_path / "reports")])
+    cli.main()
+    report = (tmp_path / "reports" / "claims_heldout_rules.md").read_text(encoding="utf-8")
+    assert "written by hand" in report
+    assert "H01: invented claim: thirteenth" in report    # the rules take "O 13º ... foi pago" for a claim
