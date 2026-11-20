@@ -20,11 +20,15 @@ extractor never computes an amount: the code does (triage.py).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+
+from .llm import LLMOutputError
 
 CLAIM_TYPES = {
     "overtime": "Horas extras",
@@ -234,19 +238,15 @@ OTHER_RULES = {"danos morais": r"danos? mora", "adicional de insalubridade": r"i
                "vale-transporte": r"vale-transporte"}
 
 
-def _sentences(text: str) -> list[str]:
-    parts = re.split(r"(?<=[.;:])\s+|\n+", text)
-    return [" ".join(p.split()) for p in parts if p.strip()]
-
-
 def rule_extract(text: str) -> Extraction:
     """Keyword baseline: a claim type is found when a sentence mentions it, even to say it was paid."""
-    sentences = _sentences(text)
-    in_words = _DATE_WORDS.findall(text)                 # the closing line dates the petition
+    flat = " ".join(text.split())                       # petitions break lines in the middle of sentences
+    sentences = re.split(r"(?<=[.;:])\s+", flat)
+    in_words = _DATE_WORDS.findall(flat)                # the closing line dates the petition
     filing = " de ".join(in_words[-1]) if in_words else None
 
     def first(pattern, flags=re.IGNORECASE):
-        match = re.search(pattern, text, flags)
+        match = re.search(pattern, flat, flags)
         return match.group(1) if match else None
 
     def as_iso(found):
@@ -257,9 +257,9 @@ def rule_extract(text: str) -> Extraction:
         "admission_date": as_iso(first(r"admitid[oa] em " + _DATE)),
         "termination_date": as_iso(first(r"(?:dispensad[oa]|demitid[oa])[^.]*? em " + _DATE)
                                    or first(r"pediu demissão em " + _DATE)),
-        "termination_type": ("without_cause" if re.search(r"sem justa causa", text, re.I)
-                             else "resignation" if re.search(r"pediu demissão", text, re.I)
-                             else "with_cause" if re.search(r"justa causa", text, re.I) else "unknown"),
+        "termination_type": ("without_cause" if re.search(r"sem justa causa", flat, re.I)
+                             else "resignation" if re.search(r"pediu demissão", flat, re.I)
+                             else "with_cause" if re.search(r"justa causa", flat, re.I) else "unknown"),
         "monthly_salary": (first(r"salário[^.]*?R\$ ?(\d[\d.]*,\d{2})") or "").replace(".", "").replace(",", "."),
         "weekly_hours": first(r"(\d+) horas semanais"),
         "filing_date": as_iso(filing),
@@ -281,3 +281,47 @@ def rule_extract(text: str) -> Extraction:
         if hits:
             raw["claims"].append({"type": "other", "quote": hits[0], "label": label})
     return parse_extraction(raw, text)
+
+
+# --- LLM extraction ---------------------------------------------------------------
+
+MAX_PETITION_CHARS = 20_000
+
+SYSTEM_PROMPT = """You read a Brazilian labor complaint (petição inicial trabalhista) and copy its facts and requests into a fixed JSON object. You never compute anything.
+
+Return only a JSON object with these keys:
+- "admission_date", "termination_date": the dates the job started and ended, as "YYYY-MM-DD", or null.
+- "filing_date": the date written at the end of the petition, as "YYYY-MM-DD", or null.
+- "termination_type": "without_cause" (dispensa sem justa causa), "resignation" (pedido de demissão), "with_cause" (justa causa) or "unknown".
+- "monthly_salary": the monthly salary as written, with a dot for decimals (R$ 6.000,00 -> "6000.00"), or null.
+- "weekly_hours": the contracted weekly hours ("44"), or null.
+- "claims": one object for each request the petition makes (usually in "DOS PEDIDOS"). A right that is only mentioned as a fact, or said to have been paid or received, is not a claim. Each object has:
+  - "type": "overtime" (horas extras), "unpaid_fgts" (FGTS não depositado), "fgts_fine" (multa de 40% do FGTS), "notice_pay" (aviso prévio indenizado), "thirteenth" (13º salário proporcional), "vacation" (férias proporcionais com 1/3), "late_severance_fine" (multa do art. 477 da CLT) or "other" (any other request);
+  - "quote": the words of the petition that make the request, copied exactly;
+  - "hours_per_month": for overtime only, the overtime hours per month stated in the petition;
+  - "months": for unpaid_fgts only, the number of months without deposits stated in the petition;
+  - "label": for other only, a short name of the request in Portuguese, without numbers.
+
+Use only dates and numbers written in the petition, and null when it does not say. Never add amounts of money to claims."""
+
+
+def llm_extract(text: str, client, cache_path: str | Path | None = None) -> Extraction:
+    """Ask the LLM for the JSON above, then keep only what parse_extraction can check.
+
+    The raw answer is cached by the petition's hash (one cache file per model), so the
+    checks can change without paying for the calls again.
+    """
+    if len(text) > MAX_PETITION_CHARS:
+        return Extraction(problems=(f"petition longer than {MAX_PETITION_CHARS} characters: not sent",))
+    key = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    cache_file = Path(cache_path) if cache_path else None
+    cache = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file and cache_file.exists() else {}
+    if key not in cache:
+        try:
+            cache[key] = client.chat(SYSTEM_PROMPT, text, json_mode=True)
+        except LLMOutputError as exc:
+            return Extraction(problems=(f"model output rejected: {exc}",))
+        if cache_file:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps(cache, ensure_ascii=False, indent=0), encoding="utf-8")
+    return parse_extraction(cache[key], text)

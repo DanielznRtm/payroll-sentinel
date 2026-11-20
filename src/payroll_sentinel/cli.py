@@ -7,6 +7,8 @@
     python -m payroll_sentinel.cli models         # model ids your LLM key can use
     python -m payroll_sentinel.cli ask "QUESTION"  # question about the benchmark (needs an LLM)
     python -m payroll_sentinel.cli eval-ask FILE   # score ask on eval/questions.csv (needs an LLM)
+    python -m payroll_sentinel.cli triage FILE [--llm]  # claims of a petition (.txt) and what they are worth
+    python -m payroll_sentinel.cli eval-claims [--llm]  # score claim extraction on synthetic petitions
 """
 
 from __future__ import annotations
@@ -110,6 +112,60 @@ def cmd_eval_ask(args) -> None:
     print(f"Report written to {path}")
 
 
+def _claim_extractor(args):
+    """Keyword rules, or an LLM with a cache file per provider and model."""
+    from .claims import llm_extract, rule_extract
+    if not args.llm:
+        return "rules", "keyword rules", rule_extract, None
+    from .llm import LLMClient
+    client = LLMClient.from_env()
+    cache = None if args.no_cache else Path(args.data) / f"llm_claims_cache_{client.tag}.json"
+    return f"llm_{client.tag}", f"LLM {client.label}", lambda text: llm_extract(text, client, cache), client
+
+
+def cmd_triage(args) -> None:
+    from salary_core import load_params
+    from .triage import triage
+    text = Path(args.file).read_text(encoding="utf-8")
+    _, method, extract, _ = _claim_extractor(args)
+    extraction = extract(text)
+    result = triage(extraction, load_params(2026))
+    print(f"Extraction ({method}):")
+    for key, value in extraction.as_truth().items():
+        if key != "claims":
+            print(f"  {key}: {value}")
+    print("\nClaims:")
+    for e, c in zip(result.estimates, extraction.claims):
+        amount = f"R$ {e.amount:,.2f}" if e.amount is not None else "not priced"
+        print(f"  {e.type}{f' ({c.label})' if c.label else ''}: {amount} - {e.note}")
+        print(f"    \"{c.quote}\"")
+    print(f"\nPriced total: R$ {result.total:,.2f} (estimate, no interest or monetary correction)")
+    print(f"Likely procedure: {result.procedure}")
+    for flag in result.flags:
+        print(f"Flag: {flag}")
+    for problem in extraction.problems:
+        print(f"Dropped by the checks: {problem}")
+
+
+def cmd_eval_claims(args) -> None:
+    from salary_core import load_params
+    from .claims_eval import evaluate_claims
+    from .petitions import generate_petitions
+    slug, method, extract, client = _claim_extractor(args)
+    petitions = generate_petitions(args.n, seed=args.seed)
+    ev = evaluate_claims(petitions, extract, load_params(2026), method,
+                         f"synthetic, seed {args.seed}; template text, easier than real petitions")
+    if client is not None:
+        ev.llm_stats = client.stats.summary()
+    out = Path(args.reports)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"claims_synthetic_{slug}.md"
+    text = ev.report()
+    path.write_text(text, encoding="utf-8")
+    print(text[:3000])
+    print(f"Report written to {path}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="payroll_sentinel")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -146,6 +202,20 @@ def main() -> None:
     qe.add_argument("file", help="CSV with columns question,expected_query")
     qe.add_argument("--reports", default="reports")
     qe.set_defaults(func=cmd_eval_ask)
+    tr = sub.add_parser("triage", help="find the claims of a petition and price them")
+    tr.add_argument("file", help="petition as a UTF-8 .txt file (synthetic or fictitious only)")
+    tr.add_argument("--llm", action="store_true", help="extract the claims with an LLM")
+    tr.add_argument("--no-cache", action="store_true", help="ask the LLM again")
+    tr.add_argument("--data", default="data")
+    tr.set_defaults(func=cmd_triage)
+    ec = sub.add_parser("eval-claims", help="score claim extraction on synthetic petitions")
+    ec.add_argument("--llm", action="store_true", help="extract the claims with an LLM")
+    ec.add_argument("--no-cache", action="store_true", help="ask the LLM for every petition (use it to time a model)")
+    ec.add_argument("--n", type=int, default=60)
+    ec.add_argument("--seed", type=int, default=7)
+    ec.add_argument("--data", default="data")
+    ec.add_argument("--reports", default="reports")
+    ec.set_defaults(func=cmd_eval_claims)
     args = p.parse_args()
     args.func(args)
 
