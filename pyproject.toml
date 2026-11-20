@@ -16,5 +16,8 @@ ui = ["streamlit>=1.40", "openpyxl>=3.1"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+salary_core = ["params/*.json"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]

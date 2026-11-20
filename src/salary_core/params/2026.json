@@ -1,0 +1,100 @@
+{
+  "year": 2026,
+  "minimum_wage": {
+    "note": "National minimum wage from 1 January 2026, for a full-time month (Decreto 12.797/2025, art. 1).",
+    "monthly": 1621.00,
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/decreto/d12797.htm"
+    ]
+  },
+  "inss_employee": {
+    "note": "CLT employee contribution from January 2026 (Portaria Interministerial MPS/MF 13/2026, art. 7 and Annex II; ceiling in art. 2). Each rate applies only to the part of the salary inside its band; the last limit is the ceiling. The exact sum is rounded once, as in the Receita Federal worked examples.",
+    "bands": [
+      {"up_to": 1621.00, "rate": 0.075},
+      {"up_to": 2902.84, "rate": 0.09},
+      {"up_to": 4354.27, "rate": 0.12},
+      {"up_to": 8475.55, "rate": 0.14}
+    ],
+    "source": [
+      "https://www.gov.br/inss/pt-br/direitos-e-deveres/inscricao-e-contribuicao/tabela-de-contribuicao-mensal",
+      "https://www.gov.br/previdencia/pt-br/assuntos/rpps/documentos/PortariaInterministerialMPSMF13de9dejaneirode2026.pdf",
+      "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/exemplos-de-aplicacao-da-lei-15-270-2025"
+    ]
+  },
+  "inss_contribuinte_individual": {
+    "note": "A partner's pro-labore paid by a company: the company withholds 11% (Lei 10.666/2003, art. 4), capped at the INSS ceiling (the last limit of inss_employee).",
+    "rate": 0.11,
+    "source": [
+      "https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/tributos/contribuicoes-previdenciarias-pf",
+      "https://www.planalto.gov.br/ccivil_03/leis/2003/l10.666.htm"
+    ]
+  },
+  "irrf_monthly": {
+    "note": "Monthly progressive income tax table from May 2025 (Lei 15.191/2025), still valid in 2026. The last bracket has no upper limit. The simplified discount replaces all legal deductions; the payer uses whichever gives less tax.",
+    "brackets": [
+      {"up_to": 2428.80, "rate": 0.0, "deduction": 0.00},
+      {"up_to": 2826.65, "rate": 0.075, "deduction": 182.16},
+      {"up_to": 3751.05, "rate": 0.15, "deduction": 394.16},
+      {"up_to": 4664.68, "rate": 0.225, "deduction": 675.49},
+      {"up_to": null, "rate": 0.275, "deduction": 908.73}
+    ],
+    "dependent_deduction": 189.59,
+    "simplified_discount": 607.20,
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15191.htm",
+      "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026"
+    ]
+  },
+  "irrf_reduction_monthly": {
+    "note": "Monthly tax reduction from January 2026 (Lei 15.270/2025, new art. 3-A of Lei 9.250/1995), computed on the taxable income before deductions and capped at the tax from the table. Up to full_until the tax becomes zero; up to phase_out_until the reduction is constant - slope x income.",
+    "full_until": 5000.00,
+    "full_reduction_max": 312.89,
+    "phase_out_until": 7350.00,
+    "constant": 978.62,
+    "slope": 0.133145,
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15270.htm",
+      "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/exemplos-de-aplicacao-da-lei-15-270-2025"
+    ]
+  },
+  "simples_nacional": {
+    "note": "Simples Nacional service annexes (LC 123/2006 as written by LC 155/2016). Effective rate = (revenue_12m x rate - deduction) / revenue_12m. Services of art. 18 par. 5-I go to Annex III when payroll / revenue >= fator_r_threshold (par. 5-J), otherwise to Annex V (par. 5-M).",
+    "revenue_limit_12m": 4800000.00,
+    "fator_r_threshold": 0.28,
+    "annex_iii": [
+      {"up_to": 180000.00, "rate": 0.06, "deduction": 0.00},
+      {"up_to": 360000.00, "rate": 0.112, "deduction": 9360.00},
+      {"up_to": 720000.00, "rate": 0.135, "deduction": 17640.00},
+      {"up_to": 1800000.00, "rate": 0.16, "deduction": 35640.00},
+      {"up_to": 3600000.00, "rate": 0.21, "deduction": 125640.00},
+      {"up_to": 4800000.00, "rate": 0.33, "deduction": 648000.00}
+    ],
+    "annex_v": [
+      {"up_to": 180000.00, "rate": 0.155, "deduction": 0.00},
+      {"up_to": 360000.00, "rate": 0.18, "deduction": 4500.00},
+      {"up_to": 720000.00, "rate": 0.195, "deduction": 9900.00},
+      {"up_to": 1800000.00, "rate": 0.205, "deduction": 17100.00},
+      {"up_to": 3600000.00, "rate": 0.23, "deduction": 62100.00},
+      {"up_to": 4800000.00, "rate": 0.305, "deduction": 540000.00}
+    ],
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp155.htm",
+      "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm"
+    ]
+  },
+  "dividend_withholding": {
+    "note": "From January 2026, profits above monthly_threshold paid by one company to one person in a month have 10% withheld (Lei 15.270/2025, new art. 6-A of Lei 9.250/1995). Whether it reaches Simples Nacional companies is disputed, so salary_core refuses to compute above the threshold.",
+    "monthly_threshold": 50000.00,
+    "rate": 0.10,
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15270.htm"
+    ]
+  },
+  "internship": {
+    "note": "Internship stipend (Lei 11.788/2008): no mandatory INSS (art. 12 lets the intern join as a voluntary contributor) and no FGTS. The stipend pays income tax as income from work: the scholarship exemption of Lei 9.250/1995, art. 26, requires that no service is given in return.",
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2008/lei/l11788.htm",
+      "https://www.planalto.gov.br/ccivil_03/leis/l9250.htm"
+    ]
+  }
+}
