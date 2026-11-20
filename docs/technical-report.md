@@ -17,7 +17,9 @@ limits. Every number comes from a report in [`reports/`](../reports/).
 
 * **Rules** catch structural errors one row at a time. They are cheap and easy to
   explain, and they get Brazilian labor details right. The minimum wage
-  (R$ 1.621 in 2026) is prorated by weekly hours, and internship stipends are
+  (R$ 1.621 in 2026) is prorated by weekly hours against the full normal week of
+  the cut-off date, which EC 141/2026 shortens
+  ([below](#minimum-wage-after-ec-1412026)), and internship stipends are
   exempt. A naive `salary < 1621` check would flag legitimate part-time and
   intern rows; the synthetic data plants both on purpose.
 * **Peer comparison** puts every salary on a full-time-equivalent basis and
@@ -123,6 +125,35 @@ compare against. In the web UI a company can also give a family to titles the
 rules do not know; the level still comes from the title. Report:
 [`reports/reference_peers.md`](../reports/reference_peers.md), from
 [`scripts/reference_check.py`](../scripts/reference_check.py).
+
+### Minimum wage after EC 141/2026
+
+EC 141/2026 (DOU 2026-10-16) lowers the normal week to 42 h from 2026-12-16 and
+to 40 h from 2027-12-16, with no salary cut, minimum wages included (art. 2). The
+minimum wage pays the full normal week, and a contract of fewer hours may be paid
+it in proportion (TST OJ 358: hours below the constitutional limit). So the
+proportion now depends on the date: from 2026-12-16 a 42 h contract owes
+R$ 1,621.00 instead of R$ 1,547.32 (42/44), and a 40 h one R$ 1,543.81 instead of
+R$ 1,473.64. The steps of the week and the minimum wage are read from
+[`salary_core/params/2026.json`](../src/salary_core/params/2026.json), with their
+sources; a date in a year without a file (2025, 2027) is refused instead of getting
+the 2026 minimum.
+
+The benchmark cut-off, 2026-10-31, comes before the first step, so
+`reports/evaluation.md` is byte-identical before and after the change. Validating
+the same seed-42 data as of 2026-12-16 (one run of `rule_checks` with
+`validate.REFERENCE_DATE` moved to that date):
+
+| Cut-off | Blocked below the minimum | Planted errors caught | Clean rows blocked |
+|---|---|---|---|
+| 2026-10-31 | 27 | 27 / 27 | 0 |
+| 2026-12-16 | 41 | 27 / 27 | 14 (12 of 40 h, 2 of 30 h) |
+
+The 14 rows were paid less than 4.8 % (44/42) above the old 44 h proportion, legal
+on 2026-10-31 and below the 42 h one. Using the 42 h week for the proportion is
+this project's reading (decided 2026-11-20): Decreto 12.797/2025 still states an
+hourly minimum of R$ 7.37 (1,621 / 220), and the courts have not ruled on the
+proportion after the amendment yet.
 
 ### Held-out titles from real job postings
 
@@ -632,6 +663,7 @@ not for real payroll.
 ```
 src/payroll_sentinel/
   taxonomy.py   job families, levels, cities (index by kind of job), pay parameters, minimum-wage rule
+                (minimum wage and full week by date, from salary_core/params)
   generate.py   synthetic submissions + planted errors + ground truth
   normalize.py  keyword + CBO rules and LLM normalizer (batching, cache, validation)
   cbo_titles.py official CBO 2002 titles and synonyms per family (generated, do not edit)
@@ -671,6 +703,11 @@ tests/          rules, normalizers, LLM parsing/caching (with a fake client), en
 * The question evaluation is 30 questions written by one person, run once. Answers
   use full-time-equivalent salaries, so an intern's 30 h stipend is shown scaled
   to 44 h (about 1.47×).
+* The cut-off is fixed at 2026-10-31. Moving it past 2026-12-16 also needs a
+  generator that stops drawing 44 h contracts (the normal week is 42 h by then),
+  and moving it into 2027 needs a `2027.json` with the 2027 minimum wage, not
+  published yet. EC 141 (art. 5) lets a complementary law give micro and small
+  companies a transition; the validator does not know company size.
 
 ## License
 

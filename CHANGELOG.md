@@ -44,6 +44,16 @@
   (`reports/claims_synthetic_*.md`). Hand-written petitions for the real test go
   in `eval/heldout_petitions/`. Overtime after 2026-10-15 is left to a person
   because EC 141/2026 changed weekly hours and rest days.
+- **Minimum wage follows EC 141/2026.** The prorated minimum uses the full normal
+  week of the cut-off date: 44 h, then 42 h from 2026-12-16 (TST OJ 358 read with
+  the amended limit), so a 42 h contract owes the whole R$ 1,621 from that date.
+  The minimum wage and the steps of the week now come from
+  `salary_core/params/2026.json` with their sources; a year without a file is
+  refused. The 2026-10-31 cut-off is before the change: `reports/evaluation.md` is
+  identical. As of 2026-12-16 the same data would block 14 more clean rows (40 h
+  and 30 h contracts paid less than 4.8 % above the old proportion), and all
+  27 planted errors are still caught. The Hugging Face Space now also loads
+  `salary_core`.
 
 ## v1.1.0 (2026-11-15)
 

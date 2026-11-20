@@ -69,10 +69,12 @@ alone: errors caught 69.7 % -> 78.9 %). Two public demos: Streamlit Community Cl
 (server) and a static Hugging Face Space, Danielrtm1/payroll-sentinel, running the
 same app in the browser with stlite (`deploy/huggingface/`; Docker Spaces need a paid
 plan). Its `index.html` fetches files from a pinned commit (REF): bump REF and
-re-upload index.html to deploy a new version; `?local` tests a checkout. `taxonomy.py` holds the job families, levels, cities, the
+re-upload index.html to deploy a new version; `?local` tests a checkout. It also
+loads `salary_core` (modules and params JSON), which `taxonomy.py` imports. `taxonomy.py` holds the job families, levels, cities, the
 pay parameters fitted to RAIS (`pay_sigma`, city index by kind of job) and the
-2026 minimum wage (R$ 1,621, prorated by weekly hours; internship stipends are
-exempt). `validate.py` has two layers: deterministic rules, then a peer comparison
+minimum-wage rule (R$ 1,621 in 2026, prorated by weekly hours against the full
+week of the cut-off date; both read from `salary_core/params/2026.json`;
+internship stipends are exempt). `validate.py` has two layers: deterministic rules, then a peer comparison
 in which robust z-score, IQR and Isolation Forest vote (flag at 2 of 3).
 
 Baseline (v1.1 data, seed 42, default rules = keywords + CBO): precision 0.892,
@@ -162,8 +164,12 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
    - EC 141/2026 (DOU 2026-10-16) cut weekly hours to 42 from 2026-12-16 and 40 from
      2027-12-16, added a second weekly rest day and exempted graduates earning at
      least 2.5x the INSS ceiling; overtime after 2026-10-15 goes to human review.
-     Module A still prorates the minimum wage by 44 h (right for its 2026-10-31
-     reference date, not for uploads after 2026-12-16).
+     Module A prorates the minimum wage by the full week of its cut-off date
+     (`normal_weekly_hours` block: 44 h, 42 h from 2026-12-16; TST OJ 358 read with
+     the new limit, the user decided 2026-11-20, though Decreto 12.797 still says
+     R$ 7.37/h). The 2026-10-31 cut-off is before it: evaluation.md identical; as of
+     2026-12-16, 14 more clean rows blocked, 27/27 planted still caught. A cut-off
+     after 2026-12-16 needs a generator without 44 h contracts; one in 2027, a 2027.json.
    - Measured on 60 synthetic petitions (seed 7): priced total right in 48/60 with
      rules (claim precision 87.6 %, every trap sentence) and 59/60 with
      `gemini-3.5-flash-lite` (precision 100 %, recall 98.2 %, no fact wrong; both
