@@ -127,12 +127,22 @@ Age/Gender are never read, and only titles reach the LLM. It led to the symmetri
      only fills a fixed JSON query that the code validates and runs. Measured on
      the user's 30 questions in `eval/questions.csv`: 27/30 right, 5/5 out-of-scope
      refused (`gemini-3.5-flash-lite`, one run); the prompt was not tuned on them.
-2. **Module B, labor-claim triage:**
-   - A shared deterministic engine `salary_core` computes net pay for CLT,
-     contractor (PJ, Simples Nacional) and internship.
-   - Tax parameters live per year in versioned files with source links
-     (`params/2026.yaml`); none are hardcoded.
-   - At least 20 verified test cases. Reference case: R$ 6,000 CLT, no dependents →
-     INSS R$ 641.52, IRRF R$ 385.10 after the Lei 15.270/2025 reduction.
-   - The LLM extracts claims from petitions; the code computes amounts.
+2. **Module B, labor-claim triage (started 2026-11-19):**
+   - Done: the shared deterministic engine `src/salary_core/` (its own package,
+     standard library only, never imports `payroll_sentinel`, so Module C can reuse
+     it; a test checks this) computes monthly net pay in `Decimal`: `clt_net`,
+     `intern_net` and `pj_net` (Simples Nacional, Annex III or V by fator R).
+   - Tax parameters per year in `src/salary_core/params/2026.json`, with official
+     https sources for every block; `load_params` refuses a block without one. The
+     user chose JSON over YAML (no new dependency, exact decimals); none are hardcoded.
+   - 43 tests: the 5 Receita Federal worked examples for Lei 15.270 pass as
+     published; the rest are hand calculations from the official tables, written in
+     the comments. Reference case: R$ 6,000 CLT, no dependents → INSS R$ 641.51,
+     IRRF R$ 385.10. INSS is rounded once on the exact total, as the Receita examples
+     do (the user decided; rounding each band gives R$ 641.52).
+   - `pj_net` assumes a steady state (same revenue and pro-labore for 12 months,
+     pro-labore is the whole payroll) and raises instead of computing when monthly
+     profit passes R$ 50,000 (Lei 15.270 10 % withholding, disputed for the Simples).
+     Not modeled yet: 13th salary, vacation, FGTS, employer cost, alimony.
+   - Next: the LLM extracts claims from synthetic petitions; the code computes amounts.
 3. **Module C** is specified privately. Do not add it to this repo until I decide.

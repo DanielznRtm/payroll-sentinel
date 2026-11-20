@@ -28,6 +28,12 @@
   validated. The README now opens with that link, real screenshots
   (`docs/img/`), a summary of what the project demonstrates and a Mermaid
   architecture diagram.
+- **Module B started: `salary_core`.** A deterministic monthly net-pay engine for
+  CLT, Simples Nacional contractor (PJ) and internship, in its own package with
+  only the standard library. The 2026 tax parameters live in
+  `src/salary_core/params/2026.json`, with an official source for every block.
+  43 tests: the five Receita Federal worked examples for Lei 15.270/2025 pass as
+  published; reference case R$ 6,000 CLT -> INSS R$ 641.51, IRRF R$ 385.10.
 
 ## v1.1.0 (2026-11-15)
 
