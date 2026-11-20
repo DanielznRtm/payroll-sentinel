@@ -90,6 +90,29 @@
       "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15270.htm"
     ]
   },
+  "labor_rights": {
+    "note": "Amounts owed on a CLT contract, used to estimate labor claims. FGTS is 8 % of pay (Lei 8.036/1990, art. 15) and the dismissal fine 40 % of all deposits (art. 18, par. 1). Overtime pays at least 50 % more (CF art. 7, XVI; CLT art. 59, par. 1); the hourly wage is the monthly salary / (30 x daily hours) (CLT art. 64), so with a 6-day week the divisor is 5 x weekly hours (220 for 44 h, 200 for 40 h, as in TST Sumula 431). The 13th salary and proportional vacation count 1/12 per month with at least 15 days (Lei 4.090/1962, art. 1, par. 2; CLT art. 146, more than 14 days); vacation adds one third (CF art. 7, XVII). Notice is 30 days plus 3 per year of service, up to 90 (Lei 12.506/2011), and counts as service time (CLT art. 487, par. 1). Late severance costs one monthly salary (CLT art. 477, par. 8). EC 141/2026 (DOU 2026-10-16) cut weekly hours to 42 from 2026-12-16 and 40 from 2027-12-16, added a second weekly rest day and exempted graduates earning at least 2.5 x the INSS ceiling, in force on publication; how the hourly divisor applies after it is not settled, so overtime is computed only up to overtime_computed_until.",
+    "fgts_rate": 0.08,
+    "fgts_fine_rate": 0.40,
+    "overtime_premium": 0.50,
+    "hour_divisor_per_weekly_hour": 5,
+    "days_per_month": 30,
+    "month_fraction_min_days": 15,
+    "vacation_bonus_divisor": 3,
+    "notice_base_days": 30,
+    "notice_days_per_year": 3,
+    "notice_max_days": 90,
+    "late_severance_fine_salaries": 1,
+    "overtime_computed_until": "2026-10-15",
+    "source": [
+      "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
+      "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm",
+      "https://www.planalto.gov.br/ccivil_03/leis/l8036consol.htm",
+      "https://www.planalto.gov.br/ccivil_03/leis/l4090.htm",
+      "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2011/lei/l12506.htm",
+      "https://www.planalto.gov.br/ccivil_03/constituicao/emendas/emc/emc141.htm"
+    ]
+  },
   "internship": {
     "note": "Internship stipend (Lei 11.788/2008): no mandatory INSS (art. 12 lets the intern join as a voluntary contributor) and no FGTS. The stipend pays income tax as income from work: the scholarship exemption of Lei 9.250/1995, art. 26, requires that no service is given in return.",
     "source": [
