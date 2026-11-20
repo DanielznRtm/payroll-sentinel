@@ -127,7 +127,8 @@ class ClaimsEval:
         lines = [f"# Claim extraction: {self.method}", "",
                  f"Petitions: {self.n} ({self.source}). Time: {self.seconds:.1f} s.", ""]
         if self.llm_stats:
-            lines += [f"LLM: {self.llm_stats}.", ""]
+            lines += [f"LLM calls made in this run (answers already in the cache are reused, not counted): "
+                      f"{self.llm_stats}.", ""]
         lines += ["## Money", "",
                   f"- Priced total equal to the truth's: {self.totals_match}/{self.n} ({pct(self.totals_match, self.n)})",
                   f"- Sum of the differences: R$ {self.total_gap:,.2f}", "",
