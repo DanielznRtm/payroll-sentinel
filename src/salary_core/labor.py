@@ -70,13 +70,19 @@ def notice_pay(salary, start: date, end: date, params: dict) -> Decimal:
     return cents(money(salary) / _rights(params)["days_per_month"] * notice_days(start, end, params))
 
 
-def thirteenth_proportional(salary, start: date, end: date, params: dict) -> Decimal:
-    """1/12 of the salary per month worked in the year of ``end`` (earlier years assumed paid).
+def _last_day(start: date, termination: date, params: dict, paid_notice: bool) -> date:
+    _check_period(start, termination)
+    return projected_end(start, termination, params) if paid_notice else termination
 
-    Pass the projected end when notice is paid instead of worked.
+
+def thirteenth_proportional(salary, start: date, termination: date, params: dict, *, paid_notice: bool = False) -> Decimal:
+    """1/12 of the salary per month from January of the termination year (earlier years assumed paid).
+
+    With paid notice the count runs to the projected end, which may cross into the next
+    year: a dismissal on 15 December with 48 days of notice owes 13/12.
     """
-    _check_period(start, end)
-    months = months_worked(max(start, date(end.year, 1, 1)), end, params)
+    end = _last_day(start, termination, params, paid_notice)
+    months = months_worked(max(start, date(termination.year, 1, 1)), end, params)
     return cents(money(salary) * months / 12)
 
 
@@ -92,8 +98,9 @@ def vacation_months(start: date, end: date, params: dict) -> int:
     return min(12, months)
 
 
-def vacation_proportional(salary, start: date, end: date, params: dict) -> Decimal:
-    """Proportional vacation plus one third (CF art. 7, XVII). Pass the projected end when notice is paid."""
+def vacation_proportional(salary, start: date, termination: date, params: dict, *, paid_notice: bool = False) -> Decimal:
+    """Proportional vacation of the incomplete period plus one third (CF art. 7, XVII)."""
+    end = _last_day(start, termination, params, paid_notice)
     base = money(salary) * vacation_months(start, end, params) / 12
     return cents(base + base / _rights(params)["vacation_bonus_divisor"])
 
@@ -121,13 +128,14 @@ def unpaid_fgts(salary, months: int, params: dict) -> Decimal:
     return cents(money(salary) * _rights(params)["fgts_rate"] * months)
 
 
-def fgts_fine(salary, start: date, end: date, params: dict) -> Decimal:
+def fgts_fine(salary, start: date, termination: date, params: dict, *, paid_notice: bool = False) -> Decimal:
     """40 % of the FGTS deposits of the whole contract, estimated as 8 % of the current salary per month.
 
     A lower bound: deposits on the 13th salary and vacation, interest and monetary
-    correction are left out. Pass the projected end when notice is paid.
+    correction are left out. Paid notice counts as months of deposits.
     """
     r = _rights(params)
+    end = _last_day(start, termination, params, paid_notice)
     deposits = money(salary) * r["fgts_rate"] * months_worked(start, end, params)
     return cents(deposits * r["fgts_fine_rate"])
 

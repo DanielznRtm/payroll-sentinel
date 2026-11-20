@@ -39,23 +39,31 @@ def test_notice_days_by_years_of_service(start, end, days):
 
 def test_thirteenth_counts_the_projected_notice():
     # With the projection: Jan-Aug 2025 (8) + Sep 1-21 (21 days >= 15) = 9/12 -> 6,000 x 9 / 12 = 4,500.00.
-    assert thirteenth_proportional("6000.00", START, PROJECTED, P) == D("4500.00")
+    assert thirteenth_proportional("6000.00", START, END, P, paid_notice=True) == D("4500.00")
     # Without it: Jan-Jul (7) + Aug 1-10 (10 days < 15) = 7/12 -> 3,500.00.
     assert thirteenth_proportional("6000.00", START, END, P) == D("3500.00")
+
+
+def test_thirteenth_when_the_notice_crosses_into_the_next_year():
+    # Admitted 2019-09-20, dismissed 2025-12-15: 6 years -> 30 + 18 = 48 days -> projected 2026-02-01.
+    # From 2025-01-01: 12 months of 2025 + Jan 2026 + Feb 1 (1 day, no) = 13/12 -> 7,150 x 13 / 12 = 7,745.8333.
+    start, end = date(2019, 9, 20), date(2025, 12, 15)
+    assert projected_end(start, end, P) == date(2026, 2, 1)
+    assert thirteenth_proportional("7150.00", start, end, P, paid_notice=True) == D("7745.83")
 
 
 def test_vacation_of_the_current_period_plus_one_third():
     # Period starts 2025-03-15; 6 whole months to 2025-09-14, then Sep 15-21 = 7 days < 15: 6/12.
     # 6,000 x 6 / 12 = 3,000, plus one third (1,000) = 4,000.00.
     assert vacation_months(START, PROJECTED, P) == 6
-    assert vacation_proportional("6000.00", START, PROJECTED, P) == D("4000.00")
+    assert vacation_proportional("6000.00", START, END, P, paid_notice=True) == D("4000.00")
 
 
 def test_fgts_fine_estimate_over_the_whole_contract():
     # Months with >= 15 days: Mar 2021 (15-31 = 17 days) 1, Apr-Dec 2021 9, 2022-2024 36,
     # Jan-Aug 2025 8, Sep 1-21 2025 1 = 55. Deposits 6,000 x 8 % x 55 = 26,400; fine 40 % = 10,560.00.
     assert months_worked(START, PROJECTED, P) == 55
-    assert fgts_fine("6000.00", START, PROJECTED, P) == D("10560.00")
+    assert fgts_fine("6000.00", START, END, P, paid_notice=True) == D("10560.00")
 
 
 def test_overtime_over_the_worked_period():
@@ -86,9 +94,9 @@ def test_contract_shorter_than_a_year():
     projected = projected_end(start, end, P)
     assert projected == date(2025, 9, 20)
     # 13th: May 20-31 (12 days) no, Jun, Jul, Aug, Sep 1-20 (20 days) = 4/12 -> 2,000.00.
-    assert thirteenth_proportional("6000.00", start, projected, P) == D("2000.00")
+    assert thirteenth_proportional("6000.00", start, end, P, paid_notice=True) == D("2000.00")
     # Vacation: 4 whole months from May 20 to Sep 19, then Sep 20 = 1 day: 4/12 -> 2,000 + 666.67 = 2,666.67.
-    assert vacation_proportional("6000.00", start, projected, P) == D("2666.67")
+    assert vacation_proportional("6000.00", start, end, P, paid_notice=True) == D("2666.67")
 
 
 @pytest.mark.parametrize("start,end,months", [
